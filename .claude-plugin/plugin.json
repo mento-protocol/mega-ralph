@@ -1,10 +1,12 @@
 {
-  "name": "ralph-skills",
+  "name": "mega-ralph",
   "version": "1.0.0",
-  "description": "Skills for the Ralph autonomous agent system - Generate PRDs and convert them to prd.json format for autonomous execution",
+  "description": "Multi-phase autonomous project orchestration. Plan large projects with /masterplan, generate PRDs with /prd, convert to ralph format with /ralph, and execute phases autonomously with mega-ralph.sh.",
   "author": {
-    "name": "snarktank"
+    "name": "mento-protocol"
   },
+  "repository": "https://github.com/mento-protocol/mega-ralph",
+  "license": "MIT",
   "skills": "./skills/",
-  "keywords": ["ralph", "prd", "automation", "agent", "planning", "requirements", "masterplan", "discovery"]
+  "keywords": ["mega-ralph", "ralph", "prd", "masterplan", "automation", "agent", "planning", "orchestration", "multi-phase", "discovery", "autonomous"]
 }
