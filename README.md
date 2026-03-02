@@ -18,22 +18,19 @@ Based on [Geoffrey Huntley's Ralph pattern](https://ghuntley.com/ralph/).
 
 ## Setup
 
-### Option 1: Copy to your project
+### Option 1: Quick Install (recommended)
 
-Copy the ralph files into your project:
+Run the installer from your project root:
 
 ```bash
-# From your project root
-mkdir -p scripts/ralph
-cp /path/to/ralph/ralph.sh scripts/ralph/
+# Basic ralph (single PRD workflow)
+curl -sL https://raw.githubusercontent.com/snarktank/ralph/main/install.sh | bash
 
-# Copy the prompt template for your AI tool of choice:
-cp /path/to/ralph/prompt.md scripts/ralph/prompt.md    # For Amp
-# OR
-cp /path/to/ralph/CLAUDE.md scripts/ralph/CLAUDE.md    # For Claude Code
-
-chmod +x scripts/ralph/ralph.sh
+# With mega-ralph (multi-phase projects)
+curl -sL https://raw.githubusercontent.com/snarktank/ralph/main/install.sh | bash -s -- --mega
 ```
+
+This creates a `ralph/` directory with all scripts, prompts, and skills ready to go.
 
 ### Option 2: Install skills globally (Amp)
 

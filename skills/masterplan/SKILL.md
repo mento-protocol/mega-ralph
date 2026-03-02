@@ -239,6 +239,27 @@ For every phase, provide:
 
 ---
 
+## Setup Check
+
+Before generating the plan, verify the project is set up for mega-ralph:
+
+1. Check if a `ralph/` directory exists in the project root
+2. If it does **not** exist, tell the user to run the installer first:
+
+```bash
+curl -sL https://raw.githubusercontent.com/snarktank/ralph/main/install.sh | bash -s -- --mega
+```
+
+3. If `ralph/` exists but `mega-ralph.sh` is missing, tell the user to add mega-ralph support:
+
+```bash
+curl -sL https://raw.githubusercontent.com/snarktank/ralph/main/install.sh | bash -s -- --mega
+```
+
+4. Only proceed with plan generation once the setup is confirmed.
+
+---
+
 ## Output
 
 - **Format:** Markdown (`.md`)
