@@ -1,21 +1,23 @@
 #!/bin/bash
 # Ralph Wiggum - Long-running AI agent loop
-# Usage: ./ralph.sh [--tool amp|claude] [max_iterations]
-
-set -e
+# Usage: ./ralph.sh [--tool amp|claude] [--model MODEL] [max_iterations]
 
 # ---------------------------------------------------------------------------
-# Signal handling - ensure Ctrl-C kills the loop
+# Signal handling - ensure Ctrl-C kills everything
 # ---------------------------------------------------------------------------
-INTERRUPTED=false
+OUTFILE=""
 cleanup() {
-  INTERRUPTED=true
   echo ""
-  echo "Interrupted. Killing child processes..."
+  echo "Interrupted."
+  rm -f "$OUTFILE"
+  # Remove trap to avoid recursion, then kill process group
+  trap - INT TERM
   kill 0 2>/dev/null
   exit 130
 }
 trap cleanup INT TERM
+
+set -e
 
 # Parse arguments
 TOOL="amp"  # Default to amp for backwards compatibility
@@ -129,26 +131,37 @@ fi
 BACKOFF=5        # Start at 5 seconds
 MAX_BACKOFF=300  # Cap at 5 minutes
 
+# Temp file for capturing output (avoids subshell signal issues)
+OUTFILE=$(mktemp)
+
 for i in $(seq 1 $MAX_ITERATIONS); do
   echo ""
   echo "==============================================================="
   echo "  Ralph Iteration $i of $MAX_ITERATIONS ($TOOL)"
   echo "==============================================================="
 
-  # Run the selected tool with the ralph prompt
+  # Run the tool — output goes to terminal AND temp file (no subshell)
   EXIT_CODE=0
   if [[ "$TOOL" == "amp" ]]; then
-    OUTPUT=$(cat "$SCRIPT_DIR/prompt.md" | amp --dangerously-allow-all 2>&1 | tee /dev/stderr) || EXIT_CODE=$?
+    cat "$SCRIPT_DIR/prompt.md" | amp --dangerously-allow-all 2>&1 | tee "$OUTFILE" || EXIT_CODE=$?
   else
-    # Claude Code: use --dangerously-skip-permissions for autonomous operation, --print for output
-    OUTPUT=$(claude --dangerously-skip-permissions $CLAUDE_MODEL_ARGS --print < "$SCRIPT_DIR/CLAUDE.md" 2>&1 | tee /dev/stderr) || EXIT_CODE=$?
+    claude --dangerously-skip-permissions $CLAUDE_MODEL_ARGS --print < "$SCRIPT_DIR/CLAUDE.md" 2>&1 | tee "$OUTFILE" || EXIT_CODE=$?
+  fi
+
+  # Exit immediately on SIGINT/SIGTERM (exit code 130 or 143)
+  if [[ $EXIT_CODE -eq 130 || $EXIT_CODE -eq 143 ]]; then
+    echo ""
+    echo "Interrupted."
+    rm -f "$OUTFILE"
+    exit $EXIT_CODE
   fi
 
   # Check for completion signal
-  if echo "$OUTPUT" | grep -q "<promise>COMPLETE</promise>"; then
+  if grep -q "<promise>COMPLETE</promise>" "$OUTFILE" 2>/dev/null; then
     echo ""
     echo "Ralph completed all tasks!"
     echo "Completed at iteration $i of $MAX_ITERATIONS"
+    rm -f "$OUTFILE"
     exit 0
   fi
 
@@ -171,6 +184,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   sleep 2
 done
 
+rm -f "$OUTFILE"
 echo ""
 echo "Ralph reached max iterations ($MAX_ITERATIONS) without completing all tasks."
 echo "Check $PROGRESS_FILE for status."

@@ -15,7 +15,8 @@ set -e
 # ---------------------------------------------------------------------------
 cleanup() {
   echo ""
-  echo "Interrupted. Killing child processes..."
+  echo "Interrupted."
+  trap - INT TERM
   kill 0 2>/dev/null
   exit 130
 }
@@ -742,6 +743,13 @@ for (( phase_idx=0; phase_idx < TOTAL_PHASES; phase_idx++ )); do
     RALPH_MODEL_ARGS="--model $MODEL"
   fi
   "$SCRIPT_DIR/ralph.sh" --tool "$TOOL" $RALPH_MODEL_ARGS "$MAX_ITERATIONS" || RALPH_EXIT=$?
+
+  # Exit immediately on SIGINT/SIGTERM
+  if [[ $RALPH_EXIT -eq 130 || $RALPH_EXIT -eq 143 ]]; then
+    echo ""
+    echo "Interrupted."
+    exit $RALPH_EXIT
+  fi
 
   # Determine how many iterations were used by checking prd.json
   STORIES_TOTAL=$(jq '.userStories | length' "$STATE_DIR/prd.json" 2>/dev/null || echo "0")
