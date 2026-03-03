@@ -129,6 +129,9 @@ if $MEGA; then
   cp -f "$RALPH_HOME/mega-ralph-convert-prompt.md" "$RALPH_DIR/.ralph/mega-ralph-convert-prompt.md"
   echo "  [done] mega-ralph-convert-prompt.md"
 
+  cp -f "$RALPH_HOME/mega-ralph-reflect-prompt.md" "$RALPH_DIR/.ralph/mega-ralph-reflect-prompt.md"
+  echo "  [done] mega-ralph-reflect-prompt.md"
+
   # Create MASTER_PLAN.md template (user content — only if missing)
   echo ""
   echo "User content:"

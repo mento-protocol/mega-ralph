@@ -104,6 +104,7 @@ MEGA_PROGRESS="$STATE_DIR/mega-progress.json"
 TASKS_DIR="$RALPH_ROOT/tasks"
 PRD_PROMPT_TEMPLATE="$SCRIPT_DIR/mega-claude-prompt.md"
 CONVERT_PROMPT_TEMPLATE="$SCRIPT_DIR/mega-ralph-convert-prompt.md"
+REFLECT_PROMPT_TEMPLATE="$SCRIPT_DIR/mega-ralph-reflect-prompt.md"
 
 # Ensure .state/ directory exists
 mkdir -p "$STATE_DIR"
@@ -454,6 +455,71 @@ archive_phase() {
 }
 
 # ---------------------------------------------------------------------------
+# Reflect on phase learnings and update master plan
+# ---------------------------------------------------------------------------
+reflect_and_update_plan() {
+  local phase_num="$1"
+  local phase_title="$2"
+  local project_name="$3"
+
+  echo "  Reflecting on Phase $phase_num learnings and updating master plan..."
+
+  # Read progress.txt from this phase (before it gets archived/reset)
+  local progress_content=""
+  if [[ -f "$STATE_DIR/progress.txt" ]]; then
+    progress_content=$(cat "$STATE_DIR/progress.txt")
+  fi
+
+  if [[ -z "$progress_content" || "$progress_content" == "# Ralph Progress Log"* && $(wc -l < "$STATE_DIR/progress.txt") -le 3 ]]; then
+    echo "  No meaningful learnings to reflect on. Skipping."
+    return 0
+  fi
+
+  if [[ ! -f "$REFLECT_PROMPT_TEMPLATE" ]]; then
+    echo "  Warning: Reflect prompt template not found at $REFLECT_PROMPT_TEMPLATE. Skipping."
+    return 0
+  fi
+
+  # Build the reflection prompt
+  local prompt_file
+  prompt_file=$(mktemp)
+
+  local plan_file_tmp progress_file_tmp
+  plan_file_tmp=$(mktemp)
+  progress_file_tmp=$(mktemp)
+
+  cat "$PLAN_PATH" > "$plan_file_tmp"
+  printf '%s' "$progress_content" > "$progress_file_tmp"
+
+  python3 -c "
+import sys
+template = open('$REFLECT_PROMPT_TEMPLATE').read()
+replacements = {
+    '{{PHASE_NUMBER}}': '$phase_num',
+    '{{PHASE_TITLE}}': '$phase_title',
+    '{{PROJECT_NAME}}': '$project_name',
+    '{{PLAN_PATH}}': '$PLAN_PATH',
+    '{{MASTER_PLAN}}': open('$plan_file_tmp').read(),
+    '{{PHASE_PROGRESS}}': open('$progress_file_tmp').read(),
+}
+for key, val in replacements.items():
+    template = template.replace(key, val)
+sys.stdout.write(template)
+" > "$prompt_file"
+
+  # Invoke Claude to reflect and update the master plan
+  local output
+  output=$(claude --dangerously-skip-permissions --print -p "$(cat "$prompt_file")" 2>&1) || {
+    echo "  Warning: Claude failed to reflect on phase $phase_num (non-fatal, continuing)"
+    rm -f "$prompt_file" "$plan_file_tmp" "$progress_file_tmp"
+    return 0
+  }
+
+  rm -f "$prompt_file" "$plan_file_tmp" "$progress_file_tmp"
+  echo "  Master plan updated with Phase $phase_num learnings."
+}
+
+# ---------------------------------------------------------------------------
 # Generate a PRD for a single phase using Claude
 # ---------------------------------------------------------------------------
 generate_phase_prd() {
@@ -665,7 +731,10 @@ for (( phase_idx=0; phase_idx < TOTAL_PHASES; phase_idx++ )); do
     # Update progress: phase completed
     update_progress_complete "$PHASE_NUM" "$STORIES_DONE"
 
-    # Archive this phase
+    # Step 4: Reflect on learnings and update master plan (before archive resets progress.txt)
+    reflect_and_update_plan "$PHASE_NUM" "$PHASE_TITLE" "$PROJECT_NAME"
+
+    # Step 5: Archive this phase
     archive_phase "$PHASE_NUM" "$PHASE_TITLE" "$BRANCH_NAME"
 
   else

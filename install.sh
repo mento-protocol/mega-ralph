@@ -117,7 +117,7 @@ if [[ -f "$RALPH_DIR/ralph.sh" && ! -d "$RALPH_DIR/.ralph" ]]; then
   done
 
   # Move mega-ralph files to .ralph/
-  for f in mega-ralph.sh mega-claude-prompt.md mega-ralph-convert-prompt.md; do
+  for f in mega-ralph.sh mega-claude-prompt.md mega-ralph-convert-prompt.md mega-ralph-reflect-prompt.md; do
     if [[ -f "$RALPH_DIR/$f" ]]; then
       mv "$RALPH_DIR/$f" "$RALPH_DIR/.ralph/$f"
       echo "  [move] $f → .ralph/$f"
@@ -187,9 +187,10 @@ download_always "$REPO_RAW/skills/masterplan/SKILL.md" "$RALPH_DIR/.ralph/skills
 if $MEGA; then
   echo ""
   echo "Mega-ralph (.ralph/):"
-  download_always "$REPO_RAW/mega-ralph.sh"                "$RALPH_DIR/.ralph/mega-ralph.sh"                "mega-ralph.sh"
-  download_always "$REPO_RAW/mega-claude-prompt.md"        "$RALPH_DIR/.ralph/mega-claude-prompt.md"        "mega-claude-prompt.md"
-  download_always "$REPO_RAW/mega-ralph-convert-prompt.md" "$RALPH_DIR/.ralph/mega-ralph-convert-prompt.md" "mega-ralph-convert-prompt.md"
+  download_always "$REPO_RAW/mega-ralph.sh"                  "$RALPH_DIR/.ralph/mega-ralph.sh"                  "mega-ralph.sh"
+  download_always "$REPO_RAW/mega-claude-prompt.md"          "$RALPH_DIR/.ralph/mega-claude-prompt.md"          "mega-claude-prompt.md"
+  download_always "$REPO_RAW/mega-ralph-convert-prompt.md"   "$RALPH_DIR/.ralph/mega-ralph-convert-prompt.md"   "mega-ralph-convert-prompt.md"
+  download_always "$REPO_RAW/mega-ralph-reflect-prompt.md"   "$RALPH_DIR/.ralph/mega-ralph-reflect-prompt.md"   "mega-ralph-reflect-prompt.md"
 
   # Create MASTER_PLAN.md template (user content — only if missing)
   echo ""
