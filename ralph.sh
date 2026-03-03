@@ -4,6 +4,19 @@
 
 set -e
 
+# ---------------------------------------------------------------------------
+# Signal handling - ensure Ctrl-C kills the loop
+# ---------------------------------------------------------------------------
+INTERRUPTED=false
+cleanup() {
+  INTERRUPTED=true
+  echo ""
+  echo "Interrupted. Killing child processes..."
+  kill 0 2>/dev/null
+  exit 130
+}
+trap cleanup INT TERM
+
 # Parse arguments
 TOOL="amp"  # Default to amp for backwards compatibility
 MAX_ITERATIONS=10
