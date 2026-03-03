@@ -250,7 +250,7 @@ Before generating the plan, verify the project is set up for mega-ralph:
 curl -sL https://raw.githubusercontent.com/mento-protocol/mega-ralph/main/install.sh | bash -s -- --mega
 ```
 
-3. If `ralph/` exists but `mega-ralph.sh` is missing, tell the user to add mega-ralph support:
+3. If `ralph/` exists but `.ralph/mega-ralph.sh` is missing, tell the user to add mega-ralph support:
 
 ```bash
 curl -sL https://raw.githubusercontent.com/mento-protocol/mega-ralph/main/install.sh | bash -s -- --mega
@@ -263,7 +263,7 @@ curl -sL https://raw.githubusercontent.com/mento-protocol/mega-ralph/main/instal
 ## Output
 
 - **Format:** Markdown (`.md`)
-- **Location:** `ralph/` directory (same directory as `mega-ralph.sh`)
+- **Location:** `ralph/` directory (root of the ralph install)
 - **Filename:** `MASTER_PLAN.md`
 
 ---

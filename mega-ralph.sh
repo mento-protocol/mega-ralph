@@ -92,12 +92,21 @@ if [[ "$TOOL" != "amp" && "$TOOL" != "claude" ]]; then
   exit 1
 fi
 
+# ---------------------------------------------------------------------------
+# Path setup
+# ---------------------------------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLAN_PATH="$SCRIPT_DIR/$PLAN_FILE"
-MEGA_PROGRESS="$SCRIPT_DIR/mega-progress.json"
-TASKS_DIR="$SCRIPT_DIR/tasks"
+RALPH_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+STATE_DIR="$RALPH_ROOT/.state"
+PLAN_PATH="$RALPH_ROOT/$PLAN_FILE"
+MEGA_PROGRESS="$STATE_DIR/mega-progress.json"
+TASKS_DIR="$RALPH_ROOT/tasks"
 PRD_PROMPT_TEMPLATE="$SCRIPT_DIR/mega-claude-prompt.md"
 CONVERT_PROMPT_TEMPLATE="$SCRIPT_DIR/mega-ralph-convert-prompt.md"
+
+# Ensure .state/ directory exists
+mkdir -p "$STATE_DIR"
 
 if [[ ! -f "$PLAN_PATH" ]]; then
   echo "Error: Master plan not found at $PLAN_PATH"
@@ -413,7 +422,7 @@ archive_phase() {
   local phase_num="$1"
   local phase_title="$2"
   local branch_name="$3"
-  local archive_dir="$SCRIPT_DIR/archive"
+  local archive_dir="$RALPH_ROOT/archive"
 
   local date_str
   date_str=$(date +%Y-%m-%d)
@@ -424,9 +433,9 @@ archive_phase() {
   echo "Archiving phase $phase_num: $phase_title"
   mkdir -p "$archive_path"
 
-  # Archive prd.json and progress.txt
-  [[ -f "$SCRIPT_DIR/prd.json" ]] && cp "$SCRIPT_DIR/prd.json" "$archive_path/"
-  [[ -f "$SCRIPT_DIR/progress.txt" ]] && cp "$SCRIPT_DIR/progress.txt" "$archive_path/"
+  # Archive prd.json and progress.txt from .state/
+  [[ -f "$STATE_DIR/prd.json" ]] && cp "$STATE_DIR/prd.json" "$archive_path/"
+  [[ -f "$STATE_DIR/progress.txt" ]] && cp "$STATE_DIR/progress.txt" "$archive_path/"
 
   # Archive the phase PRD markdown if it exists
   local prd_pattern="$TASKS_DIR/prd-phase-$(printf '%02d' "$phase_num")-*.md"
@@ -437,11 +446,11 @@ archive_phase() {
   echo "  Archived to: $archive_path"
 
   # Clean up working files for the next phase
-  rm -f "$SCRIPT_DIR/prd.json"
-  rm -f "$SCRIPT_DIR/.last-branch"
-  echo "# Ralph Progress Log" > "$SCRIPT_DIR/progress.txt"
-  echo "Started: $(date)" >> "$SCRIPT_DIR/progress.txt"
-  echo "---" >> "$SCRIPT_DIR/progress.txt"
+  rm -f "$STATE_DIR/prd.json"
+  rm -f "$STATE_DIR/.last-branch"
+  echo "# Ralph Progress Log" > "$STATE_DIR/progress.txt"
+  echo "Started: $(date)" >> "$STATE_DIR/progress.txt"
+  echo "---" >> "$STATE_DIR/progress.txt"
 }
 
 # ---------------------------------------------------------------------------
@@ -514,7 +523,7 @@ convert_prd_to_json() {
   title_slug=$(echo "$phase_title" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//')
 
   # Remove stale prd.json from previous phase to ensure a clean conversion
-  rm -f "$SCRIPT_DIR/prd.json"
+  rm -f "$STATE_DIR/prd.json"
 
   # Build the conversion prompt from the template
   local prompt
@@ -529,20 +538,20 @@ convert_prd_to_json() {
   }
 
   # Verify prd.json was created
-  if [[ ! -f "$SCRIPT_DIR/prd.json" ]]; then
+  if [[ ! -f "$STATE_DIR/prd.json" ]]; then
     echo "Error: prd.json was not created after conversion"
     return 1
   fi
 
   # Validate it is proper JSON
-  if ! jq empty "$SCRIPT_DIR/prd.json" 2>/dev/null; then
+  if ! jq empty "$STATE_DIR/prd.json" 2>/dev/null; then
     echo "Error: prd.json is not valid JSON"
     return 1
   fi
 
   # Verify new prd.json has stories with passes: false (not stale from previous phase)
   local pending_stories
-  pending_stories=$(jq '[.userStories[] | select(.passes == false)] | length' "$SCRIPT_DIR/prd.json" 2>/dev/null || echo "0")
+  pending_stories=$(jq '[.userStories[] | select(.passes == false)] | length' "$STATE_DIR/prd.json" 2>/dev/null || echo "0")
   if [[ "$pending_stories" -eq 0 ]]; then
     echo "Error: prd.json has no stories with passes: false — conversion likely failed"
     return 1
@@ -646,8 +655,8 @@ for (( phase_idx=0; phase_idx < TOTAL_PHASES; phase_idx++ )); do
   "$SCRIPT_DIR/ralph.sh" --tool "$TOOL" "$MAX_ITERATIONS" || RALPH_EXIT=$?
 
   # Determine how many iterations were used by checking prd.json
-  STORIES_TOTAL=$(jq '.userStories | length' "$SCRIPT_DIR/prd.json" 2>/dev/null || echo "0")
-  STORIES_DONE=$(jq '[.userStories[] | select(.passes == true)] | length' "$SCRIPT_DIR/prd.json" 2>/dev/null || echo "0")
+  STORIES_TOTAL=$(jq '.userStories | length' "$STATE_DIR/prd.json" 2>/dev/null || echo "0")
+  STORIES_DONE=$(jq '[.userStories[] | select(.passes == true)] | length' "$STATE_DIR/prd.json" 2>/dev/null || echo "0")
 
   if [[ "$RALPH_EXIT" -eq 0 ]]; then
     echo ""

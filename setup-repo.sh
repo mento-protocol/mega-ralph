@@ -70,58 +70,46 @@ if [[ ! -d "$TARGET_DIR/.git" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Create ralph/ directory
+# Create directory structure
 # ---------------------------------------------------------------------------
 echo "Setting up Ralph in: $RALPH_DIR"
 echo ""
 
-mkdir -p "$RALPH_DIR"
+mkdir -p "$RALPH_DIR/.ralph/skills/prd"
+mkdir -p "$RALPH_DIR/.ralph/skills/ralph"
+mkdir -p "$RALPH_DIR/.ralph/skills/masterplan"
+mkdir -p "$RALPH_DIR/.state"
 mkdir -p "$RALPH_DIR/tasks"
 mkdir -p "$RALPH_DIR/archive"
 
 # ---------------------------------------------------------------------------
-# Copy ralph.sh
+# Copy infrastructure files (always overwrite)
 # ---------------------------------------------------------------------------
-if [[ -f "$RALPH_DIR/ralph.sh" ]]; then
-  echo "  ralph.sh already exists, skipping (use manual copy to update)"
-else
-  cp "$RALPH_HOME/ralph.sh" "$RALPH_DIR/ralph.sh"
-  chmod +x "$RALPH_DIR/ralph.sh"
-  echo "  Copied ralph.sh"
+echo "Infrastructure (.ralph/):"
+cp -f "$RALPH_HOME/ralph.sh" "$RALPH_DIR/.ralph/ralph.sh"
+chmod +x "$RALPH_DIR/.ralph/ralph.sh"
+echo "  [done] ralph.sh"
+
+cp -f "$RALPH_HOME/CLAUDE.md" "$RALPH_DIR/.ralph/CLAUDE.md"
+echo "  [done] CLAUDE.md"
+
+if [[ -f "$RALPH_HOME/prompt.md" ]]; then
+  cp -f "$RALPH_HOME/prompt.md" "$RALPH_DIR/.ralph/prompt.md"
+  echo "  [done] prompt.md"
 fi
 
 # ---------------------------------------------------------------------------
-# Copy CLAUDE.md template
+# Copy skills (always overwrite)
 # ---------------------------------------------------------------------------
-if [[ -f "$RALPH_DIR/CLAUDE.md" ]]; then
-  echo "  CLAUDE.md already exists, skipping"
-else
-  cp "$RALPH_HOME/CLAUDE.md" "$RALPH_DIR/CLAUDE.md"
-  echo "  Copied CLAUDE.md"
-fi
-
-# ---------------------------------------------------------------------------
-# Copy prompt.md template (for amp tool)
-# ---------------------------------------------------------------------------
-if [[ -f "$RALPH_DIR/prompt.md" ]]; then
-  echo "  prompt.md already exists, skipping"
-else
-  if [[ -f "$RALPH_HOME/prompt.md" ]]; then
-    cp "$RALPH_HOME/prompt.md" "$RALPH_DIR/prompt.md"
-    echo "  Copied prompt.md"
-  fi
-fi
-
-# ---------------------------------------------------------------------------
-# Copy skills directory
-# ---------------------------------------------------------------------------
+echo ""
+echo "Skills (.ralph/skills/):"
 if [[ -d "$RALPH_HOME/skills" ]]; then
-  if [[ -d "$RALPH_DIR/skills" ]]; then
-    echo "  skills/ already exists, skipping"
-  else
-    cp -r "$RALPH_HOME/skills" "$RALPH_DIR/skills"
-    echo "  Copied skills/"
-  fi
+  cp -f "$RALPH_HOME/skills/prd/SKILL.md" "$RALPH_DIR/.ralph/skills/prd/SKILL.md"
+  cp -f "$RALPH_HOME/skills/ralph/SKILL.md" "$RALPH_DIR/.ralph/skills/ralph/SKILL.md"
+  cp -f "$RALPH_HOME/skills/masterplan/SKILL.md" "$RALPH_DIR/.ralph/skills/masterplan/SKILL.md"
+  echo "  [done] skills/prd/SKILL.md"
+  echo "  [done] skills/ralph/SKILL.md"
+  echo "  [done] skills/masterplan/SKILL.md"
 fi
 
 # ---------------------------------------------------------------------------
@@ -129,36 +117,22 @@ fi
 # ---------------------------------------------------------------------------
 if $MEGA; then
   echo ""
-  echo "Setting up mega-ralph (multi-phase) support..."
+  echo "Mega-ralph (.ralph/):"
 
-  # Copy mega-ralph.sh
-  if [[ -f "$RALPH_DIR/mega-ralph.sh" ]]; then
-    echo "  mega-ralph.sh already exists, skipping"
-  else
-    cp "$RALPH_HOME/mega-ralph.sh" "$RALPH_DIR/mega-ralph.sh"
-    chmod +x "$RALPH_DIR/mega-ralph.sh"
-    echo "  Copied mega-ralph.sh"
-  fi
+  cp -f "$RALPH_HOME/mega-ralph.sh" "$RALPH_DIR/.ralph/mega-ralph.sh"
+  chmod +x "$RALPH_DIR/.ralph/mega-ralph.sh"
+  echo "  [done] mega-ralph.sh"
 
-  # Copy prompt templates
-  if [[ -f "$RALPH_DIR/mega-claude-prompt.md" ]]; then
-    echo "  mega-claude-prompt.md already exists, skipping"
-  else
-    cp "$RALPH_HOME/mega-claude-prompt.md" "$RALPH_DIR/mega-claude-prompt.md"
-    echo "  Copied mega-claude-prompt.md"
-  fi
+  cp -f "$RALPH_HOME/mega-claude-prompt.md" "$RALPH_DIR/.ralph/mega-claude-prompt.md"
+  echo "  [done] mega-claude-prompt.md"
 
-  if [[ -f "$RALPH_DIR/mega-ralph-convert-prompt.md" ]]; then
-    echo "  mega-ralph-convert-prompt.md already exists, skipping"
-  else
-    cp "$RALPH_HOME/mega-ralph-convert-prompt.md" "$RALPH_DIR/mega-ralph-convert-prompt.md"
-    echo "  Copied mega-ralph-convert-prompt.md"
-  fi
+  cp -f "$RALPH_HOME/mega-ralph-convert-prompt.md" "$RALPH_DIR/.ralph/mega-ralph-convert-prompt.md"
+  echo "  [done] mega-ralph-convert-prompt.md"
 
-  # Create MASTER_PLAN.md template
-  if [[ -f "$RALPH_DIR/MASTER_PLAN.md" ]]; then
-    echo "  MASTER_PLAN.md already exists, skipping"
-  else
+  # Create MASTER_PLAN.md template (user content — only if missing)
+  echo ""
+  echo "User content:"
+  if [[ ! -f "$RALPH_DIR/MASTER_PLAN.md" ]]; then
     cat > "$RALPH_DIR/MASTER_PLAN.md" <<'EOTEMPLATE'
 # Master Plan: [Project Name]
 
@@ -203,43 +177,37 @@ Phases are executed in order, so earlier phases must not depend on later ones.]
 
 [What this project will NOT include, to manage scope.]
 EOTEMPLATE
-    echo "  Created MASTER_PLAN.md template"
+    echo "  [done] MASTER_PLAN.md (template)"
+  else
+    echo "  [skip] MASTER_PLAN.md (already exists)"
   fi
 fi
 
 # ---------------------------------------------------------------------------
-# Create .gitignore for ralph/
+# Create .gitignore for ralph/ (only if missing)
 # ---------------------------------------------------------------------------
+echo ""
 GITIGNORE_FILE="$RALPH_DIR/.gitignore"
-if [[ -f "$GITIGNORE_FILE" ]]; then
-  echo "  .gitignore already exists, skipping"
-else
+if [[ ! -f "$GITIGNORE_FILE" ]]; then
   cat > "$GITIGNORE_FILE" <<'EOGITIGNORE'
-# Ralph working files (generated during runs)
-prd.json
-progress.txt
-.last-branch
-
-# Mega-ralph working files
-mega-progress.json
-
-# Archive is optional to commit
-# archive/
+# Runtime state (regenerated each run)
+.state/
 
 # OS files
 .DS_Store
 
-# Claude
+# Claude Code internal
 .claude/
 EOGITIGNORE
-  echo "  Created .gitignore"
+  echo "  [done] .gitignore"
+else
+  echo "  [skip] .gitignore (already exists)"
 fi
 
 # ---------------------------------------------------------------------------
-# Make scripts executable
+# Write VERSION
 # ---------------------------------------------------------------------------
-chmod +x "$RALPH_DIR/ralph.sh" 2>/dev/null || true
-chmod +x "$RALPH_DIR/mega-ralph.sh" 2>/dev/null || true
+echo "2.1.0" > "$RALPH_DIR/.ralph/VERSION"
 
 # ---------------------------------------------------------------------------
 # Print instructions
@@ -251,29 +219,23 @@ echo "================================================================"
 echo ""
 echo "Directory structure:"
 echo "  $RALPH_DIR/"
-echo "    ralph.sh          - Main agent loop"
-echo "    CLAUDE.md         - Agent prompt template"
-if [[ -f "$RALPH_DIR/prompt.md" ]]; then
-echo "    prompt.md         - Amp agent prompt template"
-fi
-echo "    tasks/            - PRD files go here"
-echo "    archive/          - Completed runs archived here"
+echo "    .ralph/               - Infrastructure (scripts, templates, skills)"
+echo "    .state/               - Runtime state (gitignored)"
+echo "    tasks/                - PRD files"
+echo "    archive/              - Completed run archives"
 if $MEGA; then
-echo "    mega-ralph.sh     - Multi-phase orchestrator"
-echo "    mega-claude-prompt.md      - PRD generation template"
-echo "    mega-ralph-convert-prompt.md  - PRD conversion template"
-echo "    MASTER_PLAN.md    - Edit this with your phase plan"
+echo "    MASTER_PLAN.md        - Edit this with your phase plan"
 fi
 echo ""
 echo "Next steps:"
 echo ""
 if $MEGA; then
 echo "  1. Edit ralph/MASTER_PLAN.md with your project phases"
-echo "  2. Run: cd ralph && ./mega-ralph.sh --tool claude"
+echo "  2. Run: cd ralph && ./.ralph/mega-ralph.sh --tool claude"
 else
-echo "  1. Create a PRD: use Claude with the 'prd' skill, or write tasks/prd-feature.md"
-echo "  2. Convert to prd.json: use Claude with the 'ralph' skill"
-echo "  3. Run: cd ralph && ./ralph.sh --tool claude"
+echo "  1. Create a PRD: use Claude with the /prd skill"
+echo "  2. Convert to prd.json: use Claude with the /ralph skill"
+echo "  3. Run: cd ralph && ./.ralph/ralph.sh --tool claude"
 fi
 echo ""
 echo "Tip: Add ralph/ to your repo so teammates can use the same setup."

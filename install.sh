@@ -1,5 +1,5 @@
 #!/bin/bash
-# install.sh - Install Ralph into any project repository
+# install.sh - Install or update Ralph in any project repository
 #
 # Quick install (basic ralph):
 #   curl -sL https://raw.githubusercontent.com/mento-protocol/mega-ralph/main/install.sh | bash
@@ -18,6 +18,7 @@ set -e
 REPO_RAW="https://raw.githubusercontent.com/mento-protocol/mega-ralph/main"
 RALPH_DIR="ralph"
 MEGA=false
+VERSION="2.1.0"
 
 # ---------------------------------------------------------------------------
 # Arguments
@@ -31,7 +32,7 @@ while [[ $# -gt 0 ]]; do
     -h|--help)
       echo "Usage: install.sh [--mega]"
       echo ""
-      echo "Install Ralph into the current directory."
+      echo "Install or update Ralph in the current directory."
       echo ""
       echo "Options:"
       echo "  --mega    Also install mega-ralph for multi-phase projects"
@@ -65,6 +66,15 @@ download() {
   fi
 }
 
+download_always() {
+  local url="$1"
+  local dest="$2"
+  local label="$3"
+
+  download "$url" "$dest"
+  echo "  [done] $label"
+}
+
 download_if_missing() {
   local url="$1"
   local dest="$2"
@@ -81,19 +91,6 @@ download_if_missing() {
 # ---------------------------------------------------------------------------
 # Preflight
 # ---------------------------------------------------------------------------
-if [[ -d "$RALPH_DIR" ]]; then
-  echo "Ralph is already set up in this directory ($RALPH_DIR/)."
-  echo ""
-  echo "To update, delete the ralph/ directory and re-run this script."
-  echo "To add mega-ralph support to an existing install:"
-  echo "  curl -sL $REPO_RAW/install.sh | bash -s -- --mega"
-  if ! $MEGA; then
-    exit 0
-  fi
-  echo ""
-  echo "Continuing to install mega-ralph files..."
-fi
-
 if [[ ! -d ".git" ]]; then
   echo "Warning: This directory is not a git repository."
   echo "Ralph works best with git. Consider running 'git init' first."
@@ -101,47 +98,102 @@ if [[ ! -d ".git" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
+# Migration: detect old flat structure and move files
+# ---------------------------------------------------------------------------
+if [[ -f "$RALPH_DIR/ralph.sh" && ! -d "$RALPH_DIR/.ralph" ]]; then
+  echo ""
+  echo "Detected old ralph directory structure. Migrating to v2..."
+  echo ""
+
+  mkdir -p "$RALPH_DIR/.ralph"
+  mkdir -p "$RALPH_DIR/.state"
+
+  # Move infrastructure files to .ralph/
+  for f in ralph.sh CLAUDE.md prompt.md; do
+    if [[ -f "$RALPH_DIR/$f" ]]; then
+      mv "$RALPH_DIR/$f" "$RALPH_DIR/.ralph/$f"
+      echo "  [move] $f → .ralph/$f"
+    fi
+  done
+
+  # Move mega-ralph files to .ralph/
+  for f in mega-ralph.sh mega-claude-prompt.md mega-ralph-convert-prompt.md; do
+    if [[ -f "$RALPH_DIR/$f" ]]; then
+      mv "$RALPH_DIR/$f" "$RALPH_DIR/.ralph/$f"
+      echo "  [move] $f → .ralph/$f"
+    fi
+  done
+
+  # Move skills to .ralph/skills/
+  if [[ -d "$RALPH_DIR/skills" ]]; then
+    mv "$RALPH_DIR/skills" "$RALPH_DIR/.ralph/skills"
+    echo "  [move] skills/ → .ralph/skills/"
+  fi
+
+  # Move runtime state files to .state/
+  for f in prd.json progress.txt .last-branch mega-progress.json; do
+    if [[ -f "$RALPH_DIR/$f" ]]; then
+      mv "$RALPH_DIR/$f" "$RALPH_DIR/.state/$f"
+      echo "  [move] $f → .state/$f"
+    fi
+  done
+
+  # Update .gitignore for new structure
+  if [[ -f "$RALPH_DIR/.gitignore" ]]; then
+    rm "$RALPH_DIR/.gitignore"
+    echo "  [remove] old .gitignore (will recreate)"
+  fi
+
+  echo ""
+  echo "Migration complete! Files moved to new structure."
+  echo ""
+fi
+
+# ---------------------------------------------------------------------------
 # Create directory structure
 # ---------------------------------------------------------------------------
 echo ""
-echo "Installing Ralph..."
+echo "Installing Ralph v${VERSION}..."
 echo ""
 
-mkdir -p "$RALPH_DIR"
+mkdir -p "$RALPH_DIR/.ralph"
+mkdir -p "$RALPH_DIR/.ralph/skills/prd"
+mkdir -p "$RALPH_DIR/.ralph/skills/ralph"
+mkdir -p "$RALPH_DIR/.ralph/skills/masterplan"
+mkdir -p "$RALPH_DIR/.state"
 mkdir -p "$RALPH_DIR/tasks"
 mkdir -p "$RALPH_DIR/archive"
-mkdir -p "$RALPH_DIR/skills/prd"
-mkdir -p "$RALPH_DIR/skills/ralph"
-mkdir -p "$RALPH_DIR/skills/masterplan"
 
 # ---------------------------------------------------------------------------
-# Download core files
+# Download infrastructure files (always overwrite)
 # ---------------------------------------------------------------------------
-echo "Core files:"
-download_if_missing "$REPO_RAW/ralph.sh"   "$RALPH_DIR/ralph.sh"   "ralph.sh"
-download_if_missing "$REPO_RAW/CLAUDE.md"  "$RALPH_DIR/CLAUDE.md"  "CLAUDE.md"
-download_if_missing "$REPO_RAW/prompt.md"  "$RALPH_DIR/prompt.md"  "prompt.md"
+echo "Infrastructure (.ralph/):"
+download_always "$REPO_RAW/ralph.sh"   "$RALPH_DIR/.ralph/ralph.sh"   "ralph.sh"
+download_always "$REPO_RAW/CLAUDE.md"  "$RALPH_DIR/.ralph/CLAUDE.md"  "CLAUDE.md"
+download_always "$REPO_RAW/prompt.md"  "$RALPH_DIR/.ralph/prompt.md"  "prompt.md"
 
 # ---------------------------------------------------------------------------
-# Download skills
+# Download skills (always overwrite)
 # ---------------------------------------------------------------------------
 echo ""
-echo "Skills:"
-download_if_missing "$REPO_RAW/skills/prd/SKILL.md"        "$RALPH_DIR/skills/prd/SKILL.md"        "skills/prd/SKILL.md"
-download_if_missing "$REPO_RAW/skills/ralph/SKILL.md"      "$RALPH_DIR/skills/ralph/SKILL.md"      "skills/ralph/SKILL.md"
-download_if_missing "$REPO_RAW/skills/masterplan/SKILL.md" "$RALPH_DIR/skills/masterplan/SKILL.md" "skills/masterplan/SKILL.md"
+echo "Skills (.ralph/skills/):"
+download_always "$REPO_RAW/skills/prd/SKILL.md"        "$RALPH_DIR/.ralph/skills/prd/SKILL.md"        "skills/prd/SKILL.md"
+download_always "$REPO_RAW/skills/ralph/SKILL.md"      "$RALPH_DIR/.ralph/skills/ralph/SKILL.md"      "skills/ralph/SKILL.md"
+download_always "$REPO_RAW/skills/masterplan/SKILL.md" "$RALPH_DIR/.ralph/skills/masterplan/SKILL.md" "skills/masterplan/SKILL.md"
 
 # ---------------------------------------------------------------------------
-# Mega-ralph files
+# Mega-ralph files (always overwrite infrastructure)
 # ---------------------------------------------------------------------------
 if $MEGA; then
   echo ""
-  echo "Mega-ralph (multi-phase):"
-  download_if_missing "$REPO_RAW/mega-ralph.sh"                "$RALPH_DIR/mega-ralph.sh"                "mega-ralph.sh"
-  download_if_missing "$REPO_RAW/mega-claude-prompt.md"        "$RALPH_DIR/mega-claude-prompt.md"        "mega-claude-prompt.md"
-  download_if_missing "$REPO_RAW/mega-ralph-convert-prompt.md" "$RALPH_DIR/mega-ralph-convert-prompt.md" "mega-ralph-convert-prompt.md"
+  echo "Mega-ralph (.ralph/):"
+  download_always "$REPO_RAW/mega-ralph.sh"                "$RALPH_DIR/.ralph/mega-ralph.sh"                "mega-ralph.sh"
+  download_always "$REPO_RAW/mega-claude-prompt.md"        "$RALPH_DIR/.ralph/mega-claude-prompt.md"        "mega-claude-prompt.md"
+  download_always "$REPO_RAW/mega-ralph-convert-prompt.md" "$RALPH_DIR/.ralph/mega-ralph-convert-prompt.md" "mega-ralph-convert-prompt.md"
 
-  # Create MASTER_PLAN.md template
+  # Create MASTER_PLAN.md template (user content — only if missing)
+  echo ""
+  echo "User content:"
   if [[ ! -f "$RALPH_DIR/MASTER_PLAN.md" ]]; then
     cat > "$RALPH_DIR/MASTER_PLAN.md" <<'EOTEMPLATE'
 # Master Plan: [Project Name]
@@ -194,26 +246,18 @@ EOTEMPLATE
 fi
 
 # ---------------------------------------------------------------------------
-# Create .gitignore
+# Create .gitignore (only if missing — user content)
 # ---------------------------------------------------------------------------
 echo ""
 if [[ ! -f "$RALPH_DIR/.gitignore" ]]; then
   cat > "$RALPH_DIR/.gitignore" <<'EOGITIGNORE'
-# Ralph working files (generated during runs)
-prd.json
-progress.txt
-.last-branch
-
-# Mega-ralph working files
-mega-progress.json
-
-# Archive is optional to commit
-# archive/
+# Runtime state (regenerated each run)
+.state/
 
 # OS files
 .DS_Store
 
-# Claude
+# Claude Code internal
 .claude/
 EOGITIGNORE
   echo "  [done] .gitignore"
@@ -222,27 +266,31 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Write VERSION
+# ---------------------------------------------------------------------------
+echo "$VERSION" > "$RALPH_DIR/.ralph/VERSION"
+
+# ---------------------------------------------------------------------------
 # Set permissions
 # ---------------------------------------------------------------------------
-chmod +x "$RALPH_DIR/ralph.sh" 2>/dev/null || true
-chmod +x "$RALPH_DIR/mega-ralph.sh" 2>/dev/null || true
+chmod +x "$RALPH_DIR/.ralph/ralph.sh" 2>/dev/null || true
+chmod +x "$RALPH_DIR/.ralph/mega-ralph.sh" 2>/dev/null || true
 
 # ---------------------------------------------------------------------------
 # Done
 # ---------------------------------------------------------------------------
 echo ""
 echo "================================================================"
-echo "  Ralph installed successfully!"
+echo "  Ralph v${VERSION} installed successfully!"
 echo "================================================================"
 echo ""
 echo "  $RALPH_DIR/"
-echo "    ralph.sh          - Autonomous agent loop"
-echo "    CLAUDE.md         - Agent instructions"
-echo "    prompt.md         - Amp agent instructions"
-echo "    skills/           - PRD, Ralph, and Masterplan skills"
+echo "    .ralph/               - Infrastructure (scripts, templates, skills)"
+echo "    .state/               - Runtime state (gitignored)"
+echo "    tasks/                - PRD files"
+echo "    archive/              - Completed run archives"
 if $MEGA; then
-echo "    mega-ralph.sh     - Multi-phase orchestrator"
-echo "    MASTER_PLAN.md    - Edit this with your phase plan"
+echo "    MASTER_PLAN.md        - Edit this with your phase plan"
 fi
 echo ""
 echo "Next steps:"
@@ -250,11 +298,11 @@ echo ""
 if $MEGA; then
 echo "  1. Edit $RALPH_DIR/MASTER_PLAN.md with your project phases"
 echo "     (or use the /masterplan skill to generate one)"
-echo "  2. Run: cd $RALPH_DIR && ./mega-ralph.sh --tool claude"
+echo "  2. Run: cd $RALPH_DIR && ./.ralph/mega-ralph.sh --tool claude"
 else
 echo "  1. Create a PRD:  use Claude with the /prd skill"
 echo "  2. Convert it:    use Claude with the /ralph skill"
-echo "  3. Run:           cd $RALPH_DIR && ./ralph.sh --tool claude"
+echo "  3. Run:           cd $RALPH_DIR && ./.ralph/ralph.sh --tool claude"
 echo ""
 echo "  For multi-phase projects, re-run with --mega:"
 echo "    curl -sL $REPO_RAW/install.sh | bash -s -- --mega"

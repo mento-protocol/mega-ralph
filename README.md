@@ -2,7 +2,7 @@
 
 ![Ralph](ralph.webp)
 
-Ralph is an autonomous AI agent loop that runs AI coding tools ([Amp](https://ampcode.com) or [Claude Code](https://docs.anthropic.com/en/docs/claude-code)) repeatedly until all PRD items are complete. Each iteration is a fresh instance with clean context. Memory persists via git history, `progress.txt`, and `prd.json`.
+Ralph is an autonomous AI agent loop that runs AI coding tools ([Amp](https://ampcode.com) or [Claude Code](https://docs.anthropic.com/en/docs/claude-code)) repeatedly until all PRD items are complete. Each iteration is a fresh instance with clean context. Memory persists via git history, `.state/progress.txt`, and `.state/prd.json`.
 
 **Mega-Ralph** extends this to multi-phase projects — it reads a `MASTER_PLAN.md`, generates PRDs for each phase, and runs Ralph phase-by-phase until the entire project is done.
 
@@ -30,29 +30,36 @@ curl -sL https://raw.githubusercontent.com/mento-protocol/mega-ralph/main/instal
 curl -sL https://raw.githubusercontent.com/mento-protocol/mega-ralph/main/install.sh | bash -s -- --mega
 ```
 
-The installer is idempotent — it skips files that already exist. Run it again with `--mega` to add mega-ralph to an existing setup.
+The installer is idempotent — infrastructure files are always updated, user content (MASTER_PLAN.md, .gitignore) is preserved. Run it again anytime to update to the latest version.
 
 ### What gets installed
 
 ```
 your-project/
   ralph/
-    ralph.sh                    # Agent loop (runs one PRD to completion)
-    CLAUDE.md                   # Agent instructions (Claude Code)
-    prompt.md                   # Agent instructions (Amp)
-    skills/
-      prd/SKILL.md              # /prd - generate PRDs
-      ralph/SKILL.md            # /ralph - convert PRDs to prd.json
-      masterplan/SKILL.md       # /masterplan - plan multi-phase projects
-    tasks/                      # PRD files go here
-    archive/                    # Completed runs archived here
+    MASTER_PLAN.md              # Your project plan (only with --mega)
+    tasks/                      # PRD markdown files
+    archive/                    # Completed run archives
     .gitignore
 
-    # With --mega:
-    mega-ralph.sh               # Multi-phase orchestrator
-    mega-claude-prompt.md       # Phase PRD generation template
-    mega-ralph-convert-prompt.md  # Phase PRD conversion template
-    MASTER_PLAN.md              # Your project plan (edit this)
+    .ralph/                     # Infrastructure (managed by installer)
+      VERSION                   # Version tracking
+      ralph.sh                  # Agent loop
+      mega-ralph.sh             # Multi-phase orchestrator (--mega)
+      CLAUDE.md                 # Agent instructions (Claude Code)
+      prompt.md                 # Agent instructions (Amp)
+      mega-claude-prompt.md     # Phase PRD generation template (--mega)
+      mega-ralph-convert-prompt.md  # Phase PRD conversion template (--mega)
+      skills/
+        prd/SKILL.md            # /prd - generate PRDs
+        ralph/SKILL.md          # /ralph - convert PRDs to prd.json
+        masterplan/SKILL.md     # /masterplan - plan multi-phase projects
+
+    .state/                     # Runtime state (gitignored)
+      prd.json                  # Current PRD (generated per run)
+      progress.txt              # Agent learnings log
+      mega-progress.json        # Phase tracking (mega-ralph)
+      .last-branch              # Branch change detection
 ```
 
 ### Alternative setup methods
@@ -117,7 +124,7 @@ Answer the clarifying questions. Output goes to `tasks/prd-[feature-name].md`.
 /ralph convert tasks/prd-[feature-name].md
 ```
 
-Creates `prd.json` with user stories structured for autonomous execution.
+Creates `.state/prd.json` with user stories structured for autonomous execution.
 
 ### 3. Run Ralph
 
@@ -125,10 +132,10 @@ Creates `prd.json` with user stories structured for autonomous execution.
 cd ralph
 
 # Using Claude Code
-./ralph.sh --tool claude [max_iterations]
+./.ralph/ralph.sh --tool claude [max_iterations]
 
 # Using Amp
-./ralph.sh --tool amp [max_iterations]
+./.ralph/ralph.sh --tool amp [max_iterations]
 ```
 
 Ralph will:
@@ -160,24 +167,24 @@ Open `ralph/MASTER_PLAN.md` and adjust phases, ordering, or scope. Each phase sh
 
 ```bash
 cd ralph
-./mega-ralph.sh --tool claude
+./.ralph/mega-ralph.sh --tool claude
 ```
 
 Mega-Ralph will, for each phase:
 1. Generate a detailed PRD from the master plan
-2. Convert it to `prd.json`
+2. Convert it to `.state/prd.json`
 3. Run Ralph to execute all stories in that phase
 4. Archive the phase and move to the next
 
 ```bash
 # Resume from a specific phase
-./mega-ralph.sh --tool claude --start-phase 5
+./.ralph/mega-ralph.sh --tool claude --start-phase 5
 
 # Limit iterations per phase
-./mega-ralph.sh --tool claude --max-iterations-per-phase 15
+./.ralph/mega-ralph.sh --tool claude --max-iterations-per-phase 15
 ```
 
-Progress is tracked in `mega-progress.json`.
+Progress is tracked in `.state/mega-progress.json`.
 
 ---
 
@@ -187,8 +194,8 @@ Progress is tracked in `mega-progress.json`.
 
 Each iteration spawns a **new AI instance** with clean context. The only memory between iterations is:
 - Git history (commits from previous iterations)
-- `progress.txt` (learnings and context)
-- `prd.json` (which stories are done)
+- `.state/progress.txt` (learnings and context)
+- `.state/prd.json` (which stories are done)
 
 ### Small Tasks
 
@@ -212,6 +219,10 @@ Ralph only works if there are feedback loops:
 - Tests verify behavior
 - CI must stay green (broken code compounds across iterations)
 
+### Error Recovery
+
+Ralph includes exponential backoff for transient errors (API quota limits, network issues). When an iteration fails with a non-zero exit code, it waits 5s, then 10s, 20s, etc. up to 5 minutes before retrying. The backoff resets after a successful iteration.
+
 ### AGENTS.md / CLAUDE.md Updates
 
 After each iteration, Ralph updates relevant AGENTS.md / CLAUDE.md files with learnings. Future iterations (and human developers) benefit from discovered patterns, gotchas, and conventions.
@@ -224,16 +235,19 @@ When all stories have `passes: true`, Ralph outputs `<promise>COMPLETE</promise>
 
 ```bash
 # See which stories are done
-cat prd.json | jq '.userStories[] | {id, title, passes}'
+cat .state/prd.json | jq '.userStories[] | {id, title, passes}'
 
 # See learnings from previous iterations
-cat progress.txt
+cat .state/progress.txt
 
 # Check git history
 git log --oneline -10
 
 # Check mega-ralph progress
-cat mega-progress.json | jq '.phases[] | {phase, title, status}'
+cat .state/mega-progress.json | jq '.phases[] | {phase, title, status}'
+
+# Check installed version
+cat .ralph/VERSION
 ```
 
 ## Flowchart

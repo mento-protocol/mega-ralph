@@ -13,19 +13,24 @@ cd flowchart && npm run dev
 # Build the flowchart
 cd flowchart && npm run build
 
-# Run Ralph with Amp (default)
-./ralph.sh [max_iterations]
+# Run Ralph with Claude Code (from installed ralph/ directory)
+./.ralph/ralph.sh --tool claude [max_iterations]
 
-# Run Ralph with Claude Code
-./ralph.sh --tool claude [max_iterations]
+# Run Ralph with Amp
+./.ralph/ralph.sh --tool amp [max_iterations]
+
+# Run Mega-Ralph
+./.ralph/mega-ralph.sh --tool claude
 ```
 
-## Key Files
+## Key Files (source repo)
 
-- `ralph.sh` - The bash loop that spawns fresh AI instances (supports `--tool amp` or `--tool claude`)
-- `prompt.md` - Instructions given to each AMP instance
--  `CLAUDE.md` - Instructions given to each Claude Code instance
-- `prd.json.example` - Example PRD format
+- `ralph.sh` - The bash loop that spawns fresh AI instances (installs to `.ralph/ralph.sh`)
+- `mega-ralph.sh` - Multi-phase orchestrator (installs to `.ralph/mega-ralph.sh`)
+- `CLAUDE.md` - Instructions given to each Claude Code instance (installs to `.ralph/CLAUDE.md`)
+- `prompt.md` - Instructions given to each Amp instance (installs to `.ralph/prompt.md`)
+- `install.sh` - Curl-installable setup script
+- `setup-repo.sh` - Local setup from source repo
 - `flowchart/` - Interactive React Flow diagram explaining how Ralph works
 
 ## Flowchart
@@ -42,6 +47,6 @@ npm run dev
 ## Patterns
 
 - Each iteration spawns a fresh AI instance (Amp or Claude Code) with clean context
-- Memory persists via git history, `progress.txt`, and `prd.json`
+- Memory persists via git history, `.state/progress.txt`, and `.state/prd.json`
 - Stories should be small enough to complete in one context window
 - Always update AGENTS.md with discovered patterns for future iterations
