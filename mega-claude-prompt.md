@@ -37,7 +37,7 @@ Generate a focused, well-scoped PRD for **Phase {{PHASE_NUMBER}}: {{PHASE_TITLE}
 4. **User Stories:** Each story must be:
    - Small enough to complete in ONE Ralph iteration (one context window, one focused change)
    - Ordered by dependency (schema/data first, then backend logic, then UI)
-   - Assigned a sequential ID (US-001, US-002, etc.)
+   - Assigned a phase-prefixed sequential ID (P{{PHASE_NUMBER}}-US-001, P{{PHASE_NUMBER}}-US-002, etc.)
    - Include verifiable acceptance criteria (not vague)
    - Include "Typecheck passes" or equivalent quality check as a criterion
    - For UI stories: include "Verify in browser using dev-browser skill"

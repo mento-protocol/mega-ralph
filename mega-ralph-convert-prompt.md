@@ -19,7 +19,7 @@ Create a `ralph/prd.json` file with this exact structure:
   "description": "[Description from PRD title/intro]",
   "userStories": [
     {
-      "id": "US-001",
+      "id": "P{{PHASE_NUMBER}}-US-001",
       "title": "[Story title]",
       "description": "As a [user], I want [feature] so that [benefit]",
       "acceptanceCriteria": [
@@ -47,7 +47,7 @@ For example: `ralph/phase-03-api-endpoints`
 
 1. **Each user story in the PRD becomes one JSON entry** - do not merge or split unless a story is clearly too large for one iteration.
 
-2. **IDs:** Sequential starting from US-001.
+2. **IDs:** Phase-prefixed, sequential: `P{{PHASE_NUMBER}}-US-001`, `P{{PHASE_NUMBER}}-US-002`, etc.
 
 3. **Priority:** Matches the order from the PRD (first story = priority 1). Stories must be ordered by dependency: schema/data first, then backend, then UI.
 
