@@ -28,6 +28,7 @@ PLAN_FILE="MASTER_PLAN.md"
 START_PHASE=1
 MAX_ITERATIONS=25
 TOOL="claude"
+MODEL=""
 
 # ---------------------------------------------------------------------------
 # Argument parsing
@@ -66,6 +67,14 @@ while [[ $# -gt 0 ]]; do
       TOOL="${1#*=}"
       shift
       ;;
+    --model)
+      MODEL="$2"
+      shift 2
+      ;;
+    --model=*)
+      MODEL="${1#*=}"
+      shift
+      ;;
     -h|--help)
       echo "Usage: mega-ralph.sh [OPTIONS]"
       echo ""
@@ -74,6 +83,7 @@ while [[ $# -gt 0 ]]; do
       echo "  --start-phase N               Resume from phase N (default: 1)"
       echo "  --max-iterations-per-phase N  Max ralph iterations per phase (default: 25)"
       echo "  --tool amp|claude             AI tool to use (default: claude)"
+      echo "  --model MODEL                 Claude model to use (e.g., sonnet, opus)"
       echo "  -h, --help                    Show this help"
       exit 0
       ;;
@@ -90,6 +100,12 @@ done
 if [[ "$TOOL" != "amp" && "$TOOL" != "claude" ]]; then
   echo "Error: Invalid tool '$TOOL'. Must be 'amp' or 'claude'."
   exit 1
+fi
+
+# Build model args for claude CLI
+CLAUDE_MODEL_ARGS=""
+if [[ -n "$MODEL" ]]; then
+  CLAUDE_MODEL_ARGS="--model $MODEL"
 fi
 
 # ---------------------------------------------------------------------------
@@ -509,7 +525,7 @@ sys.stdout.write(template)
 
   # Invoke Claude to reflect and update the master plan
   local output
-  output=$(claude --dangerously-skip-permissions --print -p "$(cat "$prompt_file")" 2>&1) || {
+  output=$(claude --dangerously-skip-permissions $CLAUDE_MODEL_ARGS --print -p "$(cat "$prompt_file")" 2>&1) || {
     echo "  Warning: Claude failed to reflect on phase $phase_num (non-fatal, continuing)"
     rm -f "$prompt_file" "$plan_file_tmp" "$progress_file_tmp"
     return 0
@@ -553,7 +569,7 @@ generate_phase_prd() {
 
   # Invoke Claude to generate the PRD
   local output
-  output=$(claude --dangerously-skip-permissions --print -p "$prompt" 2>&1) || {
+  output=$(claude --dangerously-skip-permissions $CLAUDE_MODEL_ARGS --print -p "$prompt" 2>&1) || {
     echo "Error: Claude failed to generate PRD for phase $phase_num" >&2
     echo "$output" >&2
     return 1
@@ -597,7 +613,7 @@ convert_prd_to_json() {
 
   # Invoke Claude to convert the PRD
   local output
-  output=$(claude --dangerously-skip-permissions --print -p "$prompt" 2>&1) || {
+  output=$(claude --dangerously-skip-permissions $CLAUDE_MODEL_ARGS --print -p "$prompt" 2>&1) || {
     echo "Error: Claude failed to convert PRD to prd.json"
     echo "$output"
     return 1
@@ -635,6 +651,9 @@ echo "  MEGA-RALPH - Multi-Phase Project Orchestrator"
 echo "================================================================"
 echo "  Plan:       $PLAN_FILE"
 echo "  Tool:       $TOOL"
+if [[ -n "$MODEL" ]]; then
+echo "  Model:      $MODEL"
+fi
 echo "  Start:      Phase $START_PHASE"
 echo "  Max Iters:  $MAX_ITERATIONS per phase"
 echo "================================================================"
@@ -718,7 +737,11 @@ for (( phase_idx=0; phase_idx < TOTAL_PHASES; phase_idx++ )); do
   echo ""
 
   RALPH_EXIT=0
-  "$SCRIPT_DIR/ralph.sh" --tool "$TOOL" "$MAX_ITERATIONS" || RALPH_EXIT=$?
+  RALPH_MODEL_ARGS=""
+  if [[ -n "$MODEL" ]]; then
+    RALPH_MODEL_ARGS="--model $MODEL"
+  fi
+  "$SCRIPT_DIR/ralph.sh" --tool "$TOOL" $RALPH_MODEL_ARGS "$MAX_ITERATIONS" || RALPH_EXIT=$?
 
   # Determine how many iterations were used by checking prd.json
   STORIES_TOTAL=$(jq '.userStories | length' "$STATE_DIR/prd.json" 2>/dev/null || echo "0")
@@ -746,7 +769,11 @@ for (( phase_idx=0; phase_idx < TOTAL_PHASES; phase_idx++ )); do
 
     echo ""
     echo "To resume, run:"
-    echo "  ./mega-ralph.sh --plan $PLAN_FILE --start-phase $PHASE_NUM --tool $TOOL"
+    local resume_cmd="./mega-ralph.sh --plan $PLAN_FILE --start-phase $PHASE_NUM --tool $TOOL"
+    if [[ -n "$MODEL" ]]; then
+      resume_cmd="$resume_cmd --model $MODEL"
+    fi
+    echo "  $resume_cmd"
     exit 1
   fi
 done

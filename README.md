@@ -131,8 +131,12 @@ Creates `.state/prd.json` with user stories structured for autonomous execution.
 ```bash
 cd ralph
 
-# Using Claude Code
+# Using Claude Code (default model)
 ./.ralph/ralph.sh --tool claude [max_iterations]
+
+# Using a specific model
+./.ralph/ralph.sh --tool claude --model sonnet [max_iterations]
+./.ralph/ralph.sh --tool claude --model opus [max_iterations]
 
 # Using Amp
 ./.ralph/ralph.sh --tool amp [max_iterations]
@@ -168,6 +172,7 @@ Open `ralph/MASTER_PLAN.md` and adjust phases, ordering, or scope. Each phase sh
 ```bash
 cd ralph
 ./.ralph/mega-ralph.sh --tool claude
+./.ralph/mega-ralph.sh --tool claude --model sonnet
 ```
 
 Mega-Ralph will, for each phase:
@@ -179,6 +184,9 @@ Mega-Ralph will, for each phase:
 ```bash
 # Resume from a specific phase
 ./.ralph/mega-ralph.sh --tool claude --start-phase 5
+
+# Use a specific model
+./.ralph/mega-ralph.sh --tool claude --model sonnet
 
 # Limit iterations per phase
 ./.ralph/mega-ralph.sh --tool claude --max-iterations-per-phase 15

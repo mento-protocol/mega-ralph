@@ -20,6 +20,7 @@ trap cleanup INT TERM
 # Parse arguments
 TOOL="amp"  # Default to amp for backwards compatibility
 MAX_ITERATIONS=10
+MODEL=""
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -31,6 +32,14 @@ while [[ $# -gt 0 ]]; do
       TOOL="${1#*=}"
       shift
       ;;
+    --model)
+      MODEL="$2"
+      shift 2
+      ;;
+    --model=*)
+      MODEL="${1#*=}"
+      shift
+      ;;
     *)
       # Assume it's max_iterations if it's a number
       if [[ "$1" =~ ^[0-9]+$ ]]; then
@@ -40,6 +49,12 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+# Build model args for claude CLI
+CLAUDE_MODEL_ARGS=""
+if [[ -n "$MODEL" ]]; then
+  CLAUDE_MODEL_ARGS="--model $MODEL"
+fi
 
 # Validate tool choice
 if [[ "$TOOL" != "amp" && "$TOOL" != "claude" ]]; then
@@ -102,7 +117,11 @@ if [ ! -f "$PROGRESS_FILE" ]; then
   echo "---" >> "$PROGRESS_FILE"
 fi
 
-echo "Starting Ralph - Tool: $TOOL - Max iterations: $MAX_ITERATIONS"
+if [[ -n "$MODEL" ]]; then
+  echo "Starting Ralph - Tool: $TOOL - Model: $MODEL - Max iterations: $MAX_ITERATIONS"
+else
+  echo "Starting Ralph - Tool: $TOOL - Max iterations: $MAX_ITERATIONS"
+fi
 
 # ---------------------------------------------------------------------------
 # Exponential backoff settings
@@ -122,7 +141,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     OUTPUT=$(cat "$SCRIPT_DIR/prompt.md" | amp --dangerously-allow-all 2>&1 | tee /dev/stderr) || EXIT_CODE=$?
   else
     # Claude Code: use --dangerously-skip-permissions for autonomous operation, --print for output
-    OUTPUT=$(claude --dangerously-skip-permissions --print < "$SCRIPT_DIR/CLAUDE.md" 2>&1 | tee /dev/stderr) || EXIT_CODE=$?
+    OUTPUT=$(claude --dangerously-skip-permissions $CLAUDE_MODEL_ARGS --print < "$SCRIPT_DIR/CLAUDE.md" 2>&1 | tee /dev/stderr) || EXIT_CODE=$?
   fi
 
   # Check for completion signal
