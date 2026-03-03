@@ -11,6 +11,17 @@
 set -e
 
 # ---------------------------------------------------------------------------
+# Signal handling - ensure Ctrl-C kills child processes
+# ---------------------------------------------------------------------------
+cleanup() {
+  echo ""
+  echo "Interrupted. Killing child processes..."
+  kill 0 2>/dev/null
+  exit 130
+}
+trap cleanup INT TERM
+
+# ---------------------------------------------------------------------------
 # Defaults
 # ---------------------------------------------------------------------------
 PLAN_FILE="MASTER_PLAN.md"

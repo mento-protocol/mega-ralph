@@ -3,7 +3,7 @@
   "version": "2.0.0",
   "description": "Ralph & Mega-Ralph autonomous agent system - Generate PRDs, plan multi-phase projects, and convert them to prd.json for autonomous execution",
   "author": {
-    "name": "snarktank"
+    "name": "mento-protocol"
   },
   "skills": "./skills/",
   "keywords": ["ralph", "mega-ralph", "prd", "automation", "agent", "planning", "requirements", "masterplan", "discovery", "multi-phase"]

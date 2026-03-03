@@ -247,13 +247,13 @@ Before generating the plan, verify the project is set up for mega-ralph:
 2. If it does **not** exist, tell the user to run the installer first:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/snarktank/ralph/main/install.sh | bash -s -- --mega
+curl -sL https://raw.githubusercontent.com/mento-protocol/mega-ralph/main/install.sh | bash -s -- --mega
 ```
 
 3. If `ralph/` exists but `mega-ralph.sh` is missing, tell the user to add mega-ralph support:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/snarktank/ralph/main/install.sh | bash -s -- --mega
+curl -sL https://raw.githubusercontent.com/mento-protocol/mega-ralph/main/install.sh | bash -s -- --mega
 ```
 
 4. Only proceed with plan generation once the setup is confirmed.

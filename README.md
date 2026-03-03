@@ -24,10 +24,10 @@ Run the installer from your project root. It downloads everything you need into 
 
 ```bash
 # Single-feature workflow (ralph)
-curl -sL https://raw.githubusercontent.com/snarktank/ralph/main/install.sh | bash
+curl -sL https://raw.githubusercontent.com/mento-protocol/mega-ralph/main/install.sh | bash
 
 # Multi-phase workflow (mega-ralph)
-curl -sL https://raw.githubusercontent.com/snarktank/ralph/main/install.sh | bash -s -- --mega
+curl -sL https://raw.githubusercontent.com/mento-protocol/mega-ralph/main/install.sh | bash -s -- --mega
 ```
 
 The installer is idempotent — it skips files that already exist. Run it again with `--mega` to add mega-ralph to an existing setup.
@@ -76,7 +76,7 @@ cp -r skills/ralph ~/.claude/skills/
 <summary>Claude Code Marketplace</summary>
 
 ```bash
-/plugin marketplace add snarktank/ralph
+/plugin marketplace add mento-protocol/mega-ralph
 /plugin install ralph-skills@ralph-marketplace
 ```
 

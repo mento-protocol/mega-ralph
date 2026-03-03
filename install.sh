@@ -2,10 +2,10 @@
 # install.sh - Install Ralph into any project repository
 #
 # Quick install (basic ralph):
-#   curl -sL https://raw.githubusercontent.com/snarktank/ralph/main/install.sh | bash
+#   curl -sL https://raw.githubusercontent.com/mento-protocol/mega-ralph/main/install.sh | bash
 #
 # Install with mega-ralph (multi-phase projects):
-#   curl -sL https://raw.githubusercontent.com/snarktank/ralph/main/install.sh | bash -s -- --mega
+#   curl -sL https://raw.githubusercontent.com/mento-protocol/mega-ralph/main/install.sh | bash -s -- --mega
 #
 # Run locally:
 #   bash install.sh [--mega]
@@ -15,7 +15,7 @@ set -e
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
-REPO_RAW="https://raw.githubusercontent.com/snarktank/ralph/main"
+REPO_RAW="https://raw.githubusercontent.com/mento-protocol/mega-ralph/main"
 RALPH_DIR="ralph"
 MEGA=false
 

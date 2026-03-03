@@ -1,7 +1,7 @@
 {
   "name": "ralph-marketplace",
   "owner": {
-    "name": "snarktank"
+    "name": "mento-protocol"
   },
   "metadata": {
     "description": "Ralph & Mega-Ralph autonomous agent system - Generate PRDs, plan multi-phase projects, and execute them autonomously",
