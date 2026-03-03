@@ -425,7 +425,9 @@ archive_phase() {
 
   echo "  Archived to: $archive_path"
 
-  # Reset progress.txt for the next phase
+  # Clean up working files for the next phase
+  rm -f "$SCRIPT_DIR/prd.json"
+  rm -f "$SCRIPT_DIR/.last-branch"
   echo "# Ralph Progress Log" > "$SCRIPT_DIR/progress.txt"
   echo "Started: $(date)" >> "$SCRIPT_DIR/progress.txt"
   echo "---" >> "$SCRIPT_DIR/progress.txt"
@@ -450,12 +452,12 @@ generate_phase_prd() {
 
   # If PRD already exists, skip generation
   if [[ -f "$prd_path" ]]; then
-    echo "  PRD already exists: $prd_path (skipping generation)"
+    echo "  PRD already exists: $prd_path (skipping generation)" >&2
     echo "$prd_path"
     return
   fi
 
-  echo "  Generating PRD for Phase $phase_num: $phase_title ..."
+  echo "  Generating PRD for Phase $phase_num: $phase_title ..." >&2
 
   mkdir -p "$TASKS_DIR"
 
@@ -466,8 +468,8 @@ generate_phase_prd() {
   # Invoke Claude to generate the PRD
   local output
   output=$(claude --dangerously-skip-permissions --print -p "$prompt" 2>&1) || {
-    echo "Error: Claude failed to generate PRD for phase $phase_num"
-    echo "$output"
+    echo "Error: Claude failed to generate PRD for phase $phase_num" >&2
+    echo "$output" >&2
     return 1
   }
 
@@ -476,9 +478,9 @@ generate_phase_prd() {
     # Claude may have output the PRD to stdout instead of saving it.
     # Save it ourselves as a fallback.
     echo "$output" > "$prd_path"
-    echo "  PRD saved (from stdout fallback): $prd_path"
+    echo "  PRD saved (from stdout fallback): $prd_path" >&2
   else
-    echo "  PRD generated: $prd_path"
+    echo "  PRD generated: $prd_path" >&2
   fi
 
   echo "$prd_path"
@@ -499,6 +501,9 @@ convert_prd_to_json() {
   padded_phase=$(printf '%02d' "$phase_num")
   local title_slug
   title_slug=$(echo "$phase_title" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//')
+
+  # Remove stale prd.json from previous phase to ensure a clean conversion
+  rm -f "$SCRIPT_DIR/prd.json"
 
   # Build the conversion prompt from the template
   local prompt
@@ -524,7 +529,15 @@ convert_prd_to_json() {
     return 1
   fi
 
-  echo "  prd.json created successfully"
+  # Verify new prd.json has stories with passes: false (not stale from previous phase)
+  local pending_stories
+  pending_stories=$(jq '[.userStories[] | select(.passes == false)] | length' "$SCRIPT_DIR/prd.json" 2>/dev/null || echo "0")
+  if [[ "$pending_stories" -eq 0 ]]; then
+    echo "Error: prd.json has no stories with passes: false — conversion likely failed"
+    return 1
+  fi
+
+  echo "  prd.json created successfully ($pending_stories stories)"
 }
 
 # ---------------------------------------------------------------------------
