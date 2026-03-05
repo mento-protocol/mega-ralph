@@ -2,7 +2,7 @@
 
 ![Mega-Ralph](ralph.png)
 
-Ralph is an autonomous AI agent loop that runs AI coding tools ([Amp](https://ampcode.com) or [Claude Code](https://docs.anthropic.com/en/docs/claude-code)) repeatedly until all PRD items are complete. Each iteration is a fresh instance with clean context. Memory persists via git history, `.ralph/current/progress.txt`, and `.ralph/current/prd.json`.
+Ralph is an autonomous AI agent loop that runs AI coding tools ([Amp](https://ampcode.com), [Claude Code](https://docs.anthropic.com/en/docs/claude-code), or [Codex CLI](https://github.com/openai/codex)) repeatedly until all PRD items are complete. Each iteration is a fresh instance with clean context. Memory persists via git history, `.ralph/current/progress.txt`, and `.ralph/current/prd.json`.
 
 **Mega-Ralph** extends this to multi-phase projects — it reads a masterplan from `plans/`, generates PRDs for each phase, and runs Ralph phase-by-phase until the entire project is done.
 
@@ -21,14 +21,10 @@ Based on [Geoffrey Huntley's Ralph pattern](https://ghuntley.com/ralph/).
 
 ## Install
 
-Run the installer from your project root. It downloads everything you need into a `ralph/` directory.
+Run the installer from your project root. It creates `plans/` and `.ralph/` at the top level.
 
 ```bash
-# Single-feature workflow (ralph)
 curl -sL https://raw.githubusercontent.com/mento-protocol/mega-ralph/main/install.sh | bash
-
-# Multi-phase workflow (mega-ralph)
-curl -sL https://raw.githubusercontent.com/mento-protocol/mega-ralph/main/install.sh | bash -s -- --mega
 ```
 
 The installer is idempotent — infrastructure files are always updated, user content (plans/) is preserved. Run it again anytime to update to the latest version.
@@ -37,35 +33,35 @@ The installer is idempotent — infrastructure files are always updated, user co
 
 ```
 your-project/
-  ralph/
-    plans/                      # PRD & masterplan files (committed)
-    .gitignore                  # Ignores .ralph/ directory
+  plans/                      # PRD & masterplan files (committed)
+    2026-03-05-M1-my-project.md
+    2026-03-05-M1-P01-project-setup.md
+    2026-03-10-P1-add-login-button.md
 
-    .ralph/                     # Infrastructure (gitignored, regenerated)
-      VERSION                   # Version tracking
-      ralph.sh                  # Agent loop
-      mega-ralph.sh             # Multi-phase orchestrator (--mega)
-      CLAUDE.md                 # Agent instructions (Claude Code)
-      prompt.md                 # Agent instructions (Amp)
-      mega-claude-prompt.md     # Phase PRD generation template (--mega)
-      mega-ralph-convert-prompt.md  # Phase PRD conversion template (--mega)
-      mega-ralph-reflect-prompt.md  # Phase reflection template (--mega)
-      skills/
-        prd/SKILL.md            # /prd - generate PRDs
-        ralph/SKILL.md          # /ralph - convert PRDs to prd.json
-        masterplan/SKILL.md     # /masterplan - plan multi-phase projects
-      state/                    # Per-plan runtime state
-        M1/                     # Masterplan 1 state
-          masterplan.json       # Phase tracking
-          prd.json              # Current phase PRD
-          progress.txt          # Agent learnings log
-          .last-branch          # Branch change detection
-          interjection.md       # User notes for next iteration
-        P1/                     # Standalone PRD 1 state
-          prd.json
-          progress.txt
-      current -> state/M1       # Symlink to active state dir
-      archive/                  # Completed phase archives
+  .ralph/                     # Infrastructure (gitignored)
+    run.sh                    # Unified entry point
+    VERSION                   # Version tracking
+    CLAUDE.md                 # Agent instructions (Claude Code)
+    prompt.md                 # Agent instructions (Amp)
+    mega-claude-prompt.md     # Phase PRD generation template
+    mega-ralph-convert-prompt.md  # Phase PRD conversion template
+    mega-ralph-reflect-prompt.md  # Phase reflection template
+    skills/
+      prd/SKILL.md            # /prd - generate PRDs
+      ralph/SKILL.md          # /ralph - convert PRDs to prd.json
+      masterplan/SKILL.md     # /masterplan - plan multi-phase projects
+    state/                    # Per-plan runtime state
+      M1/                     # Masterplan 1 state
+        masterplan.json       # Phase tracking
+        prd.json              # Current phase PRD
+        progress.txt          # Agent learnings log
+        .last-branch          # Branch change detection
+        interjection.md       # User notes for next iteration
+      P1/                     # Standalone PRD 1 state
+        prd.json
+        progress.txt
+    current -> state/M1       # Symlink to active state dir
+    archive/                  # Completed phase archives
 ```
 
 ### Naming conventions
@@ -143,21 +139,19 @@ Creates `.ralph/current/prd.json` with user stories structured for autonomous ex
 ### 3. Run Ralph
 
 ```bash
-cd ralph
-
-# Using Claude Code (default model)
-./.ralph/ralph.sh --tool claude [max_iterations]
+# Using Claude Code (default)
+.ralph/run.sh --tool claude [max_iterations]
 
 # Using a specific model
-./.ralph/ralph.sh --tool claude --model sonnet [max_iterations]
-./.ralph/ralph.sh --tool claude --model opus [max_iterations]
+.ralph/run.sh --tool claude --model sonnet [max_iterations]
+.ralph/run.sh --tool claude --model opus [max_iterations]
 
 # Using Amp
-./.ralph/ralph.sh --tool amp [max_iterations]
+.ralph/run.sh --tool amp [max_iterations]
 
-# Using Codex (default: codex-mini-latest)
-./.ralph/ralph.sh --tool codex [max_iterations]
-./.ralph/ralph.sh --tool codex --model codex-1 [max_iterations]
+# Using Codex
+.ralph/run.sh --tool codex [max_iterations]
+.ralph/run.sh --tool codex --model codex-1 [max_iterations]
 ```
 
 Ralph will:
@@ -183,15 +177,14 @@ The skill does deep discovery on your codebase/domain, asks clarifying questions
 
 ### 2. Review and edit the plan
 
-Open the masterplan in `ralph/plans/` and adjust phases, ordering, or scope. Each phase should have 3-8 user stories worth of work.
+Open the masterplan in `plans/` and adjust phases, ordering, or scope. Each phase should have 3-8 user stories worth of work.
 
 ### 3. Run Mega-Ralph
 
 ```bash
-cd ralph
-./.ralph/mega-ralph.sh --plan M1 --tool claude
-./.ralph/mega-ralph.sh --plan M1 --tool claude --model sonnet
-./.ralph/mega-ralph.sh --plan M1 --tool codex
+.ralph/run.sh --plan M1 --tool claude
+.ralph/run.sh --plan M1 --tool claude --model sonnet
+.ralph/run.sh --plan M1 --tool codex
 ```
 
 Mega-Ralph will, for each phase:
@@ -202,16 +195,21 @@ Mega-Ralph will, for each phase:
 
 ```bash
 # Resume from a specific phase
-./.ralph/mega-ralph.sh --plan M1 --tool claude --start-phase 5
-
-# Use a specific model
-./.ralph/mega-ralph.sh --plan M1 --tool claude --model sonnet
+.ralph/run.sh --plan M1 --start-phase 5
 
 # Limit iterations per phase
-./.ralph/mega-ralph.sh --plan M1 --tool claude --max-iterations-per-phase 15
+.ralph/run.sh --plan M1 --tool claude --max-iterations-per-phase 15
 ```
 
 Progress is tracked in `.ralph/state/M1/masterplan.json`.
+
+### 4. Switch between plans
+
+```bash
+.ralph/run.sh switch
+```
+
+Lists all plans in `.ralph/state/`, shows progress, and lets you switch the `current` symlink interactively.
 
 ---
 
@@ -274,7 +272,10 @@ When all stories have `passes: true`, Ralph outputs `<promise>COMPLETE</promise>
 
 ```bash
 # Check current status
-.ralph/ralph.sh status
+.ralph/run.sh status
+
+# Switch between plans
+.ralph/run.sh switch
 
 # See which stories are done
 cat .ralph/current/prd.json | jq '.userStories[] | {id, title, passes}'

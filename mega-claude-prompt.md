@@ -75,7 +75,7 @@ Generate a focused, well-scoped PRD for **Phase {{PHASE_NUMBER}}: {{PHASE_TITLE}
 
 Save the PRD as a markdown file at:
 ```
-ralph/plans/{{PRD_FILENAME}}
+plans/{{PRD_FILENAME}}
 ```
 
 The filename will be provided in the `{{PRD_FILENAME}}` variable (e.g., `2026-03-05-M1-P01-project-setup.md`).

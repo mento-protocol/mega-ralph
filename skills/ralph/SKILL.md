@@ -12,7 +12,7 @@ Converts existing PRDs to the prd.json format that Ralph uses for autonomous exe
 
 ## The Job
 
-Take a PRD (markdown file or text) and convert it to `.ralph/current/prd.json` in your ralph directory.
+Take a PRD (markdown file or text) and convert it to `.ralph/current/prd.json`.
 
 **Before writing prd.json**, set up the state directory for this standalone PRD:
 
@@ -248,7 +248,7 @@ Add ability to mark tasks with different statuses.
    - Copy current `.ralph/current/prd.json` and `.ralph/current/progress.txt` to archive
    - Reset `.ralph/current/progress.txt` with fresh header
 
-**The ralph.sh script handles this automatically** when you run it, but if you are manually updating prd.json between runs, archive first.
+**The run.sh script handles this automatically** when you run it, but if you are manually updating prd.json between runs, archive first.
 
 ---
 

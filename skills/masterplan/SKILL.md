@@ -187,7 +187,7 @@ For every phase, provide:
 
 ### File Format
 
-Save to `ralph/plans/<YYYY-MM-DD>-M<idx>-<name>.md`. Example: `ralph/plans/2026-03-05-M1-my-project.md`
+Save to `plans/<YYYY-MM-DD>-M<idx>-<name>.md`. Example: `plans/2026-03-05-M1-my-project.md`
 
 ```markdown
 # Master Plan: [Project Name]
@@ -235,7 +235,7 @@ Save to `ralph/plans/<YYYY-MM-DD>-M<idx>-<name>.md`. Example: `ralph/plans/2026-
 ### Important Format Notes
 
 - Use `## Phase N -- Title` format (double-dash separator)
-- This format is parsed by `mega-ralph.sh` — don't change the heading pattern
+- This format is parsed by `run.sh` — don't change the heading pattern
 - Keep descriptions concise but complete enough for an AI to generate a detailed PRD from
 - Include a dependency graph and summary table at the end
 
@@ -243,29 +243,23 @@ Save to `ralph/plans/<YYYY-MM-DD>-M<idx>-<name>.md`. Example: `ralph/plans/2026-
 
 ## Setup Check
 
-Before generating the plan, verify the project is set up for mega-ralph:
+Before generating the plan, verify the project is set up for Ralph:
 
-1. Check if a `ralph/` directory exists in the project root
+1. Check if a `.ralph/` directory exists in the project root
 2. If it does **not** exist, tell the user to run the installer first:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/mento-protocol/mega-ralph/main/install.sh | bash -s -- --mega
+curl -sL https://raw.githubusercontent.com/mento-protocol/mega-ralph/main/install.sh | bash
 ```
 
-3. If `ralph/` exists but `.ralph/mega-ralph.sh` is missing, tell the user to add mega-ralph support:
-
-```bash
-curl -sL https://raw.githubusercontent.com/mento-protocol/mega-ralph/main/install.sh | bash -s -- --mega
-```
-
-4. Only proceed with plan generation once the setup is confirmed.
+3. Only proceed with plan generation once the setup is confirmed.
 
 ---
 
 ## Output
 
 - **Format:** Markdown (`.md`)
-- **Location:** `ralph/plans/` directory
+- **Location:** `plans/` directory
 - **Filename:** `<YYYY-MM-DD>-M<idx>-<name>.md` (e.g., `2026-03-05-M1-my-project.md`)
 
 Auto-detect the next M-index by scanning `plans/` for existing `M<idx>` files.
@@ -321,8 +315,8 @@ Before saving the masterplan:
 - [ ] Each phase produces something testable
 - [ ] No phase depends on a later phase
 - [ ] Included dependency graph and summary table
-- [ ] Used `## Phase N -- Title` heading format (parsed by mega-ralph.sh)
-- [ ] Saved to `ralph/plans/<date>-M<idx>-<name>.md`
+- [ ] Used `## Phase N -- Title` heading format (parsed by run.sh)
+- [ ] Saved to `plans/<date>-M<idx>-<name>.md`
 
 ---
 

@@ -13,39 +13,41 @@ cd flowchart && npm run dev
 # Build the flowchart
 cd flowchart && npm run build
 
-# Run Ralph with Claude Code (from installed ralph/ directory)
-./.ralph/ralph.sh --tool claude [max_iterations]
+# Run Ralph with Claude Code (from installed project directory)
+.ralph/run.sh --tool claude [max_iterations]
 
 # Run Ralph with Amp
-./.ralph/ralph.sh --tool amp [max_iterations]
+.ralph/run.sh --tool amp [max_iterations]
 
 # Run Mega-Ralph
-./.ralph/mega-ralph.sh --plan M1 --tool claude
+.ralph/run.sh --plan M1 --tool claude
 
 # Check status
-./.ralph/ralph.sh status
+.ralph/run.sh status
+
+# Switch between plans
+.ralph/run.sh switch
 ```
 
 ## Key Files (source repo)
 
-- `ralph.sh` - The bash loop that spawns fresh AI instances (installs to `.ralph/ralph.sh`)
-- `mega-ralph.sh` - Multi-phase orchestrator (installs to `.ralph/mega-ralph.sh`)
+- `run.sh` - Unified entry point: agent loop + multi-phase orchestrator (installs to `.ralph/run.sh`)
 - `CLAUDE.md` - Instructions given to each Claude Code instance (installs to `.ralph/CLAUDE.md`)
 - `prompt.md` - Instructions given to each Amp instance (installs to `.ralph/prompt.md`)
+- `mega-claude-prompt.md` - Phase PRD generation template (installs to `.ralph/mega-claude-prompt.md`)
+- `mega-ralph-convert-prompt.md` - Phase PRD conversion template (installs to `.ralph/mega-ralph-convert-prompt.md`)
+- `mega-ralph-reflect-prompt.md` - Phase reflection template (installs to `.ralph/mega-ralph-reflect-prompt.md`)
 - `install.sh` - Curl-installable setup script
 - `setup-repo.sh` - Local setup from source repo
 - `flowchart/` - Interactive React Flow diagram explaining how Ralph works
 
-## Directory Structure (installed)
+## Directory Structure (installed in a project)
 
 ```
-ralph/
+your-project/
   plans/                    # PRD & masterplan files (committed)
-  .gitignore                # Ignores .ralph/ directory
-
-  .ralph/                   # Infrastructure (gitignored, regenerated)
-    ralph.sh                # Agent loop
-    mega-ralph.sh           # Multi-phase orchestrator
+  .ralph/                   # Infrastructure (gitignored)
+    run.sh                  # Unified entry point
     CLAUDE.md               # Agent instructions (Claude Code)
     prompt.md               # Agent instructions (Amp)
     state/                  # Per-plan runtime state

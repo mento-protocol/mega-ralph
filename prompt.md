@@ -8,7 +8,7 @@ You MUST implement exactly ONE user story per invocation, then STOP. Do NOT cont
 
 ## Your Task
 
-1. Read the PRD at `.ralph/current/prd.json` (relative to the ralph/ directory)
+1. Read the PRD at `.ralph/current/prd.json`
 2. Read the progress log at `.ralph/current/progress.txt` (check Codebase Patterns section first)
 3. Check you're on the correct branch from PRD `branchName`. If not, check it out or create from main.
 4. Pick the **highest priority** user story where `passes: false`

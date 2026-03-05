@@ -52,7 +52,7 @@ Review the learnings from Phase {{PHASE_NUMBER}} and update `{{PLAN_PATH}}` with
 
 ### Rules
 
-- **DO NOT** change the `## Phase N -- Title` heading format (mega-ralph.sh parses these)
+- **DO NOT** change the `## Phase N -- Title` heading format (run.sh parses these)
 - **DO NOT** remove or rewrite existing phase descriptions — only append learnings
 - **DO NOT** mark phases as done/skipped in the plan text
 - **DO NOT** modify phases that are already completed (before Phase {{PHASE_NUMBER}})
