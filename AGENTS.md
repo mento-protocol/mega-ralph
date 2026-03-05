@@ -20,7 +20,10 @@ cd flowchart && npm run build
 ./.ralph/ralph.sh --tool amp [max_iterations]
 
 # Run Mega-Ralph
-./.ralph/mega-ralph.sh --tool claude
+./.ralph/mega-ralph.sh --plan M1 --tool claude
+
+# Check status
+./.ralph/ralph.sh status
 ```
 
 ## Key Files (source repo)
@@ -32,6 +35,26 @@ cd flowchart && npm run build
 - `install.sh` - Curl-installable setup script
 - `setup-repo.sh` - Local setup from source repo
 - `flowchart/` - Interactive React Flow diagram explaining how Ralph works
+
+## Directory Structure (installed)
+
+```
+ralph/
+  plans/                    # PRD & masterplan files (committed)
+  .gitignore                # Ignores .ralph/ directory
+
+  .ralph/                   # Infrastructure (gitignored, regenerated)
+    ralph.sh                # Agent loop
+    mega-ralph.sh           # Multi-phase orchestrator
+    CLAUDE.md               # Agent instructions (Claude Code)
+    prompt.md               # Agent instructions (Amp)
+    state/                  # Per-plan runtime state
+      M1/                   # Masterplan 1 state
+      P1/                   # Standalone PRD 1 state
+    current -> state/M1     # Symlink to active state dir
+    archive/                # Completed phase archives
+    skills/                 # Skill definitions
+```
 
 ## Flowchart
 
@@ -47,6 +70,7 @@ npm run dev
 ## Patterns
 
 - Each iteration spawns a fresh AI instance (Amp or Claude Code) with clean context
-- Memory persists via git history, `.state/progress.txt`, and `.state/prd.json`
+- Memory persists via git history, `.ralph/current/progress.txt`, and `.ralph/current/prd.json`
 - Stories should be small enough to complete in one context window
 - Always update AGENTS.md with discovered patterns for future iterations
+- User can interject between iterations via `.ralph/current/interjection.md`

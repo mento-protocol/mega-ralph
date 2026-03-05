@@ -78,9 +78,9 @@ echo ""
 mkdir -p "$RALPH_DIR/.ralph/skills/prd"
 mkdir -p "$RALPH_DIR/.ralph/skills/ralph"
 mkdir -p "$RALPH_DIR/.ralph/skills/masterplan"
-mkdir -p "$RALPH_DIR/.state"
-mkdir -p "$RALPH_DIR/tasks"
-mkdir -p "$RALPH_DIR/archive"
+mkdir -p "$RALPH_DIR/.ralph/state"
+mkdir -p "$RALPH_DIR/.ralph/archive"
+mkdir -p "$RALPH_DIR/plans"
 
 # ---------------------------------------------------------------------------
 # Copy infrastructure files (always overwrite)
@@ -131,70 +131,15 @@ if $MEGA; then
 
   cp -f "$RALPH_HOME/mega-ralph-reflect-prompt.md" "$RALPH_DIR/.ralph/mega-ralph-reflect-prompt.md"
   echo "  [done] mega-ralph-reflect-prompt.md"
-
-  # Create MASTER_PLAN.md template (user content — only if missing)
-  echo ""
-  echo "User content:"
-  if [[ ! -f "$RALPH_DIR/MASTER_PLAN.md" ]]; then
-    cat > "$RALPH_DIR/MASTER_PLAN.md" <<'EOTEMPLATE'
-# Master Plan: [Project Name]
-
-## Overview
-
-[Describe the overall project. What are you building? What is the end goal?]
-
-## Architecture & Design Decisions
-
-[Key architectural decisions that apply across all phases.
-Include technology choices, patterns, conventions, etc.]
-
-## Phases
-
-### Phase 1: Project Setup & Foundation
-
-[Describe what this phase accomplishes. Include:
-- Key deliverables
-- Technology stack setup
-- Foundation that later phases build on]
-
-### Phase 2: [Phase Title]
-
-[Describe what this phase accomplishes. Be specific about:
-- Features to implement
-- How it builds on Phase 1
-- Acceptance criteria for the phase as a whole]
-
-### Phase 3: [Phase Title]
-
-[Continue adding phases as needed. Each phase should be:
-- Self-contained enough to have its own PRD
-- Build on previous phases
-- Completable in ~5-15 ralph iterations (5-15 user stories)]
-
-## Dependencies & Ordering
-
-[Note any critical dependencies between phases.
-Phases are executed in order, so earlier phases must not depend on later ones.]
-
-## Non-Goals
-
-[What this project will NOT include, to manage scope.]
-EOTEMPLATE
-    echo "  [done] MASTER_PLAN.md (template)"
-  else
-    echo "  [skip] MASTER_PLAN.md (already exists)"
-  fi
 fi
 
 # ---------------------------------------------------------------------------
-# Create .gitignore for ralph/ (only if missing)
+# Create .gitignore (always overwrite — infrastructure, not user content)
 # ---------------------------------------------------------------------------
 echo ""
-GITIGNORE_FILE="$RALPH_DIR/.gitignore"
-if [[ ! -f "$GITIGNORE_FILE" ]]; then
-  cat > "$GITIGNORE_FILE" <<'EOGITIGNORE'
-# Runtime state (regenerated each run)
-.state/
+cat > "$RALPH_DIR/.gitignore" <<'EOGITIGNORE'
+# Ralph infrastructure and state (managed by installer, regenerated each run)
+.ralph/
 
 # OS files
 .DS_Store
@@ -202,15 +147,12 @@ if [[ ! -f "$GITIGNORE_FILE" ]]; then
 # Claude Code internal
 .claude/
 EOGITIGNORE
-  echo "  [done] .gitignore"
-else
-  echo "  [skip] .gitignore (already exists)"
-fi
+echo "  [done] .gitignore"
 
 # ---------------------------------------------------------------------------
 # Write VERSION
 # ---------------------------------------------------------------------------
-echo "2.1.0" > "$RALPH_DIR/.ralph/VERSION"
+echo "3.0.0" > "$RALPH_DIR/.ralph/VERSION"
 
 # ---------------------------------------------------------------------------
 # Print instructions
@@ -222,19 +164,24 @@ echo "================================================================"
 echo ""
 echo "Directory structure:"
 echo "  $RALPH_DIR/"
-echo "    .ralph/               - Infrastructure (scripts, templates, skills)"
-echo "    .state/               - Runtime state (gitignored)"
-echo "    tasks/                - PRD files"
-echo "    archive/              - Completed run archives"
+echo "    plans/                - PRD & masterplan files (committed)"
+echo "    .gitignore            - Ignores .ralph/ directory"
+echo ""
+echo "    .ralph/               - Infrastructure (gitignored, regenerated)"
+echo "      ralph.sh            - Agent loop"
 if $MEGA; then
-echo "    MASTER_PLAN.md        - Edit this with your phase plan"
+echo "      mega-ralph.sh       - Multi-phase orchestrator"
 fi
+echo "      state/              - Per-plan runtime state"
+echo "      archive/            - Completed run archives"
+echo "      skills/             - Skill definitions"
 echo ""
 echo "Next steps:"
 echo ""
 if $MEGA; then
-echo "  1. Edit ralph/MASTER_PLAN.md with your project phases"
-echo "  2. Run: cd ralph && ./.ralph/mega-ralph.sh --tool claude"
+echo "  1. Create a masterplan: use Claude with the /masterplan skill"
+echo "     (saves to plans/<date>-M1-<name>.md)"
+echo "  2. Run: cd ralph && ./.ralph/mega-ralph.sh --plan M1 --tool claude"
 else
 echo "  1. Create a PRD: use Claude with the /prd skill"
 echo "  2. Convert to prd.json: use Claude with the /ralph skill"

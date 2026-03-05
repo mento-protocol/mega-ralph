@@ -18,7 +18,7 @@ set -e
 REPO_RAW="https://raw.githubusercontent.com/mento-protocol/mega-ralph/main"
 RALPH_DIR="ralph"
 MEGA=false
-VERSION="2.1.0"
+VERSION="3.0.0"
 
 # ---------------------------------------------------------------------------
 # Arguments
@@ -98,15 +98,81 @@ if [[ ! -d ".git" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Migration: detect old flat structure and move files
+# Migration: v2 → v3
+# Detects old .state/ directory and migrates to new per-plan state structure
 # ---------------------------------------------------------------------------
-if [[ -f "$RALPH_DIR/ralph.sh" && ! -d "$RALPH_DIR/.ralph" ]]; then
+if [[ -d "$RALPH_DIR/.ralph" && -d "$RALPH_DIR/.state" ]]; then
   echo ""
-  echo "Detected old ralph directory structure. Migrating to v2..."
+  echo "Detected v2 structure. Migrating to v3..."
+  echo ""
+
+  # Move .state/ contents into .ralph/state/default/
+  mkdir -p "$RALPH_DIR/.ralph/state/default"
+  for f in prd.json progress.txt .last-branch mega-progress.json; do
+    if [[ -f "$RALPH_DIR/.state/$f" ]]; then
+      mv "$RALPH_DIR/.state/$f" "$RALPH_DIR/.ralph/state/default/"
+      echo "  [move] .state/$f → .ralph/state/default/$f"
+    fi
+  done
+
+  # Rename mega-progress.json → masterplan.json
+  if [[ -f "$RALPH_DIR/.ralph/state/default/mega-progress.json" ]]; then
+    mv "$RALPH_DIR/.ralph/state/default/mega-progress.json" "$RALPH_DIR/.ralph/state/default/masterplan.json"
+    echo "  [rename] mega-progress.json → masterplan.json"
+  fi
+
+  # Create current symlink
+  ln -sfn "state/default" "$RALPH_DIR/.ralph/current"
+  echo "  [done] current → state/default"
+
+  # Move tasks/ → plans/
+  if [[ -d "$RALPH_DIR/tasks" ]]; then
+    if [[ -d "$RALPH_DIR/plans" ]]; then
+      # Merge into existing plans/
+      mv "$RALPH_DIR/tasks/"* "$RALPH_DIR/plans/" 2>/dev/null || true
+      rmdir "$RALPH_DIR/tasks" 2>/dev/null || true
+    else
+      mv "$RALPH_DIR/tasks" "$RALPH_DIR/plans"
+    fi
+    echo "  [move] tasks/ → plans/"
+  fi
+
+  # Move archive/ into .ralph/
+  if [[ -d "$RALPH_DIR/archive" ]]; then
+    mkdir -p "$RALPH_DIR/.ralph/archive"
+    mv "$RALPH_DIR/archive/"* "$RALPH_DIR/.ralph/archive/" 2>/dev/null || true
+    rmdir "$RALPH_DIR/archive" 2>/dev/null || true
+    echo "  [move] archive/ → .ralph/archive/"
+  fi
+
+  # Move MASTER_PLAN.md into plans/ with new naming
+  if [[ -f "$RALPH_DIR/MASTER_PLAN.md" ]]; then
+    mkdir -p "$RALPH_DIR/plans"
+    DATE=$(date +%Y-%m-%d)
+    mv "$RALPH_DIR/MASTER_PLAN.md" "$RALPH_DIR/plans/${DATE}-M1-masterplan.md"
+    echo "  [move] MASTER_PLAN.md → plans/${DATE}-M1-masterplan.md"
+  fi
+
+  # Clean up old directories
+  rmdir "$RALPH_DIR/.state" 2>/dev/null || true
+
+  # Remove old .gitignore (will be recreated with new content)
+  rm -f "$RALPH_DIR/.gitignore"
+
+  echo ""
+  echo "Migration complete!"
+  echo ""
+
+# ---------------------------------------------------------------------------
+# Migration: v1 (flat structure) → v3
+# ---------------------------------------------------------------------------
+elif [[ -f "$RALPH_DIR/ralph.sh" && ! -d "$RALPH_DIR/.ralph" ]]; then
+  echo ""
+  echo "Detected v1 (flat) structure. Migrating to v3..."
   echo ""
 
   mkdir -p "$RALPH_DIR/.ralph"
-  mkdir -p "$RALPH_DIR/.state"
+  mkdir -p "$RALPH_DIR/.ralph/state/default"
 
   # Move infrastructure files to .ralph/
   for f in ralph.sh CLAUDE.md prompt.md; do
@@ -130,22 +196,50 @@ if [[ -f "$RALPH_DIR/ralph.sh" && ! -d "$RALPH_DIR/.ralph" ]]; then
     echo "  [move] skills/ → .ralph/skills/"
   fi
 
-  # Move runtime state files to .state/
+  # Move runtime state files to .ralph/state/default/
   for f in prd.json progress.txt .last-branch mega-progress.json; do
     if [[ -f "$RALPH_DIR/$f" ]]; then
-      mv "$RALPH_DIR/$f" "$RALPH_DIR/.state/$f"
-      echo "  [move] $f → .state/$f"
+      mv "$RALPH_DIR/$f" "$RALPH_DIR/.ralph/state/default/"
+      echo "  [move] $f → .ralph/state/default/$f"
     fi
   done
 
-  # Update .gitignore for new structure
-  if [[ -f "$RALPH_DIR/.gitignore" ]]; then
-    rm "$RALPH_DIR/.gitignore"
-    echo "  [remove] old .gitignore (will recreate)"
+  # Rename mega-progress.json → masterplan.json
+  if [[ -f "$RALPH_DIR/.ralph/state/default/mega-progress.json" ]]; then
+    mv "$RALPH_DIR/.ralph/state/default/mega-progress.json" "$RALPH_DIR/.ralph/state/default/masterplan.json"
+    echo "  [rename] mega-progress.json → masterplan.json"
   fi
 
+  # Create current symlink
+  ln -sfn "state/default" "$RALPH_DIR/.ralph/current"
+
+  # Move tasks/ → plans/
+  if [[ -d "$RALPH_DIR/tasks" ]]; then
+    mv "$RALPH_DIR/tasks" "$RALPH_DIR/plans"
+    echo "  [move] tasks/ → plans/"
+  fi
+
+  # Move archive/ into .ralph/
+  if [[ -d "$RALPH_DIR/archive" ]]; then
+    mkdir -p "$RALPH_DIR/.ralph/archive"
+    mv "$RALPH_DIR/archive/"* "$RALPH_DIR/.ralph/archive/" 2>/dev/null || true
+    rmdir "$RALPH_DIR/archive" 2>/dev/null || true
+    echo "  [move] archive/ → .ralph/archive/"
+  fi
+
+  # Move MASTER_PLAN.md into plans/ with new naming
+  if [[ -f "$RALPH_DIR/MASTER_PLAN.md" ]]; then
+    mkdir -p "$RALPH_DIR/plans"
+    DATE=$(date +%Y-%m-%d)
+    mv "$RALPH_DIR/MASTER_PLAN.md" "$RALPH_DIR/plans/${DATE}-M1-masterplan.md"
+    echo "  [move] MASTER_PLAN.md → plans/${DATE}-M1-masterplan.md"
+  fi
+
+  # Remove old .gitignore
+  rm -f "$RALPH_DIR/.gitignore"
+
   echo ""
-  echo "Migration complete! Files moved to new structure."
+  echo "Migration complete!"
   echo ""
 fi
 
@@ -160,9 +254,9 @@ mkdir -p "$RALPH_DIR/.ralph"
 mkdir -p "$RALPH_DIR/.ralph/skills/prd"
 mkdir -p "$RALPH_DIR/.ralph/skills/ralph"
 mkdir -p "$RALPH_DIR/.ralph/skills/masterplan"
-mkdir -p "$RALPH_DIR/.state"
-mkdir -p "$RALPH_DIR/tasks"
-mkdir -p "$RALPH_DIR/archive"
+mkdir -p "$RALPH_DIR/.ralph/state"
+mkdir -p "$RALPH_DIR/.ralph/archive"
+mkdir -p "$RALPH_DIR/plans"
 
 # ---------------------------------------------------------------------------
 # Download infrastructure files (always overwrite)
@@ -191,69 +285,15 @@ if $MEGA; then
   download_always "$REPO_RAW/mega-claude-prompt.md"          "$RALPH_DIR/.ralph/mega-claude-prompt.md"          "mega-claude-prompt.md"
   download_always "$REPO_RAW/mega-ralph-convert-prompt.md"   "$RALPH_DIR/.ralph/mega-ralph-convert-prompt.md"   "mega-ralph-convert-prompt.md"
   download_always "$REPO_RAW/mega-ralph-reflect-prompt.md"   "$RALPH_DIR/.ralph/mega-ralph-reflect-prompt.md"   "mega-ralph-reflect-prompt.md"
-
-  # Create MASTER_PLAN.md template (user content — only if missing)
-  echo ""
-  echo "User content:"
-  if [[ ! -f "$RALPH_DIR/MASTER_PLAN.md" ]]; then
-    cat > "$RALPH_DIR/MASTER_PLAN.md" <<'EOTEMPLATE'
-# Master Plan: [Project Name]
-
-## Overview
-
-[Describe the overall project. What are you building? What is the end goal?]
-
-## Architecture & Design Decisions
-
-[Key architectural decisions that apply across all phases.
-Include technology choices, patterns, conventions, etc.]
-
-## Phases
-
-### Phase 1 -- Project Setup & Foundation
-
-[Describe what this phase accomplishes. Include:
-- Key deliverables
-- Technology stack setup
-- Foundation that later phases build on]
-
-### Phase 2 -- [Phase Title]
-
-[Describe what this phase accomplishes. Be specific about:
-- Features to implement
-- How it builds on Phase 1
-- Acceptance criteria for the phase as a whole]
-
-### Phase 3 -- [Phase Title]
-
-[Continue adding phases as needed. Each phase should be:
-- Self-contained enough to have its own PRD
-- Build on previous phases
-- Completable in ~5-15 ralph iterations (5-15 user stories)]
-
-## Dependencies & Ordering
-
-[Note any critical dependencies between phases.
-Phases are executed in order, so earlier phases must not depend on later ones.]
-
-## Non-Goals
-
-[What this project will NOT include, to manage scope.]
-EOTEMPLATE
-    echo "  [done] MASTER_PLAN.md (template)"
-  else
-    echo "  [skip] MASTER_PLAN.md (already exists)"
-  fi
 fi
 
 # ---------------------------------------------------------------------------
-# Create .gitignore (only if missing — user content)
+# Create .gitignore (always overwrite — infrastructure, not user content)
 # ---------------------------------------------------------------------------
 echo ""
-if [[ ! -f "$RALPH_DIR/.gitignore" ]]; then
-  cat > "$RALPH_DIR/.gitignore" <<'EOGITIGNORE'
-# Runtime state (regenerated each run)
-.state/
+cat > "$RALPH_DIR/.gitignore" <<'EOGITIGNORE'
+# Ralph infrastructure and state (managed by installer, regenerated each run)
+.ralph/
 
 # OS files
 .DS_Store
@@ -261,10 +301,7 @@ if [[ ! -f "$RALPH_DIR/.gitignore" ]]; then
 # Claude Code internal
 .claude/
 EOGITIGNORE
-  echo "  [done] .gitignore"
-else
-  echo "  [skip] .gitignore (already exists)"
-fi
+echo "  [done] .gitignore"
 
 # ---------------------------------------------------------------------------
 # Write VERSION
@@ -286,20 +323,24 @@ echo "  Ralph v${VERSION} installed successfully!"
 echo "================================================================"
 echo ""
 echo "  $RALPH_DIR/"
-echo "    .ralph/               - Infrastructure (scripts, templates, skills)"
-echo "    .state/               - Runtime state (gitignored)"
-echo "    tasks/                - PRD files"
-echo "    archive/              - Completed run archives"
+echo "    plans/                - PRD & masterplan files (committed)"
+echo "    .gitignore            - Ignores .ralph/ directory"
+echo ""
+echo "    .ralph/               - Infrastructure (gitignored, regenerated)"
+echo "      ralph.sh            - Agent loop"
 if $MEGA; then
-echo "    MASTER_PLAN.md        - Edit this with your phase plan"
+echo "      mega-ralph.sh       - Multi-phase orchestrator"
 fi
+echo "      state/              - Per-plan runtime state"
+echo "      archive/            - Completed run archives"
+echo "      skills/             - Skill definitions"
 echo ""
 echo "Next steps:"
 echo ""
 if $MEGA; then
-echo "  1. Edit $RALPH_DIR/MASTER_PLAN.md with your project phases"
-echo "     (or use the /masterplan skill to generate one)"
-echo "  2. Run: cd $RALPH_DIR && ./.ralph/mega-ralph.sh --tool claude"
+echo "  1. Create a masterplan: use Claude with the /masterplan skill"
+echo "     (saves to plans/<date>-M1-<name>.md)"
+echo "  2. Run: cd $RALPH_DIR && ./.ralph/mega-ralph.sh --plan M1 --tool claude"
 else
 echo "  1. Create a PRD:  use Claude with the /prd skill"
 echo "  2. Convert it:    use Claude with the /ralph skill"
