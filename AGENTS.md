@@ -22,6 +22,10 @@ cd flowchart && npm run build
 # Run Mega-Ralph
 .ralph/run.sh --plan M1 --tool claude
 
+# Run with base branch selection and code review
+.ralph/run.sh --base main --with-review --tool claude
+.ralph/run.sh --plan M1 --base develop --with-review --review-model opus
+
 # Check status
 .ralph/run.sh status
 
@@ -37,6 +41,9 @@ cd flowchart && npm run build
 - `mega-claude-prompt.md` - Phase PRD generation template (installs to `.ralph/mega-claude-prompt.md`)
 - `mega-ralph-convert-prompt.md` - Phase PRD conversion template (installs to `.ralph/mega-ralph-convert-prompt.md`)
 - `mega-ralph-reflect-prompt.md` - Phase reflection template (installs to `.ralph/mega-ralph-reflect-prompt.md`)
+- `review-prompt.md` - Per-story review template (installs to `.ralph/review-prompt.md`)
+- `review-fixes-prompt.md` - Per-story fix applier template (installs to `.ralph/review-fixes-prompt.md`)
+- `phase-review-prompt.md` - Full-phase review template (installs to `.ralph/phase-review-prompt.md`)
 - `install.sh` - Curl-installable setup script
 - `setup-repo.sh` - Local setup from source repo
 - `flowchart/` - Interactive React Flow diagram explaining how Ralph works

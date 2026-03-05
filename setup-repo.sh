@@ -41,7 +41,7 @@ RALPH_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # TARGET_DIR is the project repo (current working directory)
 TARGET_DIR="$(pwd)"
 
-VERSION="4.0.0"
+VERSION="5.0.0"
 
 # Sanity checks
 if [[ "$RALPH_HOME" == "$TARGET_DIR" ]]; then
@@ -105,6 +105,18 @@ echo "  [done] mega-ralph-convert-prompt.md"
 
 cp -f "$RALPH_HOME/mega-ralph-reflect-prompt.md" ".ralph/mega-ralph-reflect-prompt.md"
 echo "  [done] mega-ralph-reflect-prompt.md"
+
+echo ""
+echo "Review templates (.ralph/):"
+
+cp -f "$RALPH_HOME/review-prompt.md" ".ralph/review-prompt.md"
+echo "  [done] review-prompt.md"
+
+cp -f "$RALPH_HOME/review-fixes-prompt.md" ".ralph/review-fixes-prompt.md"
+echo "  [done] review-fixes-prompt.md"
+
+cp -f "$RALPH_HOME/phase-review-prompt.md" ".ralph/phase-review-prompt.md"
+echo "  [done] phase-review-prompt.md"
 
 # ---------------------------------------------------------------------------
 # Copy skills (always overwrite)

@@ -28,7 +28,7 @@ Take a PRD (markdown file or text) and convert it to `.ralph/current/prd.json`.
 ```json
 {
   "project": "[Project Name]",
-  "branchName": "ralph/[feature-name-kebab-case]",
+  "branchName": "feat/[feature-name-kebab-case]",
   "description": "[Feature description from PRD title/intro]",
   "userStories": [
     {
@@ -129,7 +129,7 @@ Frontend stories are NOT complete until visually verified. Ralph will use the de
 2. **IDs**: Sequential (US-001, US-002, etc.)
 3. **Priority**: Based on dependency order, then document order
 4. **All stories**: `passes: false` and empty `notes`
-5. **branchName**: Derive from feature name, kebab-case, prefixed with `ralph/`
+5. **branchName**: Derive from feature name, kebab-case, prefixed with `feat/`
 6. **Always add**: "Typecheck passes" to every story's acceptance criteria
 
 ---
@@ -172,7 +172,7 @@ Add ability to mark tasks with different statuses.
 ```json
 {
   "project": "TaskApp",
-  "branchName": "ralph/task-status",
+  "branchName": "feat/task-status",
   "description": "Task Status Feature - Track task progress with status indicators",
   "userStories": [
     {

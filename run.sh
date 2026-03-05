@@ -42,6 +42,9 @@ PLANS_DIR="$PROJECT_ROOT/plans"
 PRD_PROMPT_TEMPLATE="$SCRIPT_DIR/mega-claude-prompt.md"
 CONVERT_PROMPT_TEMPLATE="$SCRIPT_DIR/mega-ralph-convert-prompt.md"
 REFLECT_PROMPT_TEMPLATE="$SCRIPT_DIR/mega-ralph-reflect-prompt.md"
+REVIEW_PROMPT_TMPL="$SCRIPT_DIR/review-prompt.md"
+REVIEW_FIXES_PROMPT_TMPL="$SCRIPT_DIR/review-fixes-prompt.md"
+PHASE_REVIEW_PROMPT_TMPL="$SCRIPT_DIR/phase-review-prompt.md"
 
 # ---------------------------------------------------------------------------
 # Help
@@ -59,12 +62,221 @@ show_help() {
   echo "  --max-iterations-per-phase N  Max iterations per phase in mega mode (default: 25)"
   echo "  --tool amp|claude|codex AI tool to use (default: claude)"
   echo "  --model MODEL           Model to use (e.g., sonnet, opus)"
+  echo "  --base BRANCH           Base branch for feature branches (skip interactive prompt)"
+  echo "  --with-review           Enable code review after each story and phase"
+  echo "  --review-tool TOOL      Tool for review (default: same as --tool)"
+  echo "  --review-model MODEL    Model for review (default: same as --model)"
   echo "  -h, --help              Show this help"
   echo ""
   echo "When no --plan is given, auto-detects mode:"
   echo "  current/masterplan.json exists  -> mega mode (resume)"
   echo "  current/prd.json exists         -> ralph mode (iteration loop)"
   exit 0
+}
+
+# ---------------------------------------------------------------------------
+# Git helpers
+# ---------------------------------------------------------------------------
+
+# Create branch from base if it doesn't exist, or switch to it if it does.
+# No-op if already on correct branch.
+git_ensure_branch() {
+  local branch="$1"
+  local base="$2"
+
+  local current
+  current=$(cd "$PROJECT_ROOT" && git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+
+  if [[ "$current" == "$branch" ]]; then
+    return 0
+  fi
+
+  # Check if branch exists (local or remote)
+  if (cd "$PROJECT_ROOT" && git show-ref --verify --quiet "refs/heads/$branch" 2>/dev/null); then
+    echo "  Switching to existing branch: $branch"
+    (cd "$PROJECT_ROOT" && git checkout "$branch")
+  elif (cd "$PROJECT_ROOT" && git show-ref --verify --quiet "refs/remotes/origin/$branch" 2>/dev/null); then
+    echo "  Checking out remote branch: $branch"
+    (cd "$PROJECT_ROOT" && git checkout -b "$branch" "origin/$branch")
+  else
+    echo "  Creating branch: $branch (from $base)"
+    (cd "$PROJECT_ROOT" && git checkout -b "$branch" "$base")
+  fi
+}
+
+# Checkout target, merge source with --no-ff, checkout back.
+# On conflict: error with clear message and exit.
+git_merge_branch() {
+  local source="$1"
+  local target="$2"
+
+  local current
+  current=$(cd "$PROJECT_ROOT" && git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+
+  echo "  Merging $source → $target"
+  (cd "$PROJECT_ROOT" && git checkout "$target")
+
+  if ! (cd "$PROJECT_ROOT" && git merge --no-ff "$source" -m "merge: $source into $target"); then
+    echo ""
+    echo "Error: Merge conflict merging $source into $target"
+    echo "Resolve conflicts manually and re-run."
+    (cd "$PROJECT_ROOT" && git merge --abort 2>/dev/null || true)
+    (cd "$PROJECT_ROOT" && git checkout "$current" 2>/dev/null || true)
+    exit 1
+  fi
+
+  # Return to original branch if different
+  if [[ "$current" != "$target" ]]; then
+    (cd "$PROJECT_ROOT" && git checkout "$current")
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Base branch selection
+# ---------------------------------------------------------------------------
+
+# Interactive prompt for base branch selection.
+# Sets BASE_BRANCH global. Skipped if --base was provided.
+prompt_base_branch() {
+  # If --base was given, use it directly
+  if [[ -n "${ARG_BASE_BRANCH:-}" ]]; then
+    BASE_BRANCH="$ARG_BASE_BRANCH"
+    echo "  Base branch: $BASE_BRANCH (from --base)"
+    return
+  fi
+
+  # On resume, load from stored config
+  if [[ -n "${STORED_BASE_BRANCH:-}" ]]; then
+    BASE_BRANCH="$STORED_BASE_BRANCH"
+    echo "  Base branch: $BASE_BRANCH (from saved config)"
+    return
+  fi
+
+  # Non-interactive (piped stdin): default to main
+  if [[ ! -t 0 ]]; then
+    BASE_BRANCH="main"
+    echo "  Warning: Non-interactive mode, defaulting base branch to 'main'"
+    return
+  fi
+
+  # Interactive prompt
+  local current_branch
+  current_branch=$(cd "$PROJECT_ROOT" && git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+
+  echo ""
+  echo "Base branch for feature branches:"
+  echo "  1) main"
+  if [[ "$current_branch" != "main" ]]; then
+    echo "  2) $current_branch (current)"
+    echo "  3) develop"
+    echo "  4) other (enter branch name)"
+    echo ""
+    read -r -p "Select [1-4, default 1]: " selection
+  else
+    echo "  2) develop"
+    echo "  3) other (enter branch name)"
+    echo ""
+    read -r -p "Select [1-3, default 1]: " selection
+  fi
+
+  case "${selection:-1}" in
+    1)
+      BASE_BRANCH="main"
+      ;;
+    2)
+      if [[ "$current_branch" != "main" ]]; then
+        BASE_BRANCH="$current_branch"
+      else
+        BASE_BRANCH="develop"
+      fi
+      ;;
+    3)
+      if [[ "$current_branch" != "main" ]]; then
+        BASE_BRANCH="develop"
+      else
+        read -r -p "Enter branch name: " BASE_BRANCH
+        if [[ -z "$BASE_BRANCH" ]]; then
+          BASE_BRANCH="main"
+        fi
+      fi
+      ;;
+    4)
+      read -r -p "Enter branch name: " BASE_BRANCH
+      if [[ -z "$BASE_BRANCH" ]]; then
+        BASE_BRANCH="main"
+      fi
+      ;;
+    *)
+      BASE_BRANCH="main"
+      ;;
+  esac
+
+  echo "  Base branch: $BASE_BRANCH"
+}
+
+# ---------------------------------------------------------------------------
+# Review turn runner
+# ---------------------------------------------------------------------------
+
+# Builds prompt from template with substitutions, invokes review tool.
+# Non-fatal on failure (warning + continue).
+#
+# Usage: run_review_turn <template_file> <key1> <val1> [<key2> <val2> ...]
+run_review_turn() {
+  local template_file="$1"
+  shift
+
+  if [[ ! -f "$template_file" ]]; then
+    echo "  Warning: Review template not found: $template_file (skipping review)"
+    return 0
+  fi
+
+  local review_tool="${REVIEW_TOOL:-$TOOL}"
+  local review_model="${REVIEW_MODEL:-$MODEL}"
+  local review_model_args=""
+  if [[ -n "$review_model" ]]; then
+    review_model_args="--model $review_model"
+  fi
+
+  # Build prompt with key/value substitutions
+  local prompt_file
+  prompt_file=$(mktemp)
+  cp "$template_file" "$prompt_file"
+
+  while [[ $# -ge 2 ]]; do
+    local key="$1"
+    local val="$2"
+    shift 2
+    # Use sed for simple placeholder replacement
+    # Escape sed special chars in val
+    local escaped_val
+    escaped_val=$(printf '%s\n' "$val" | sed 's/[&/\]/\\&/g')
+    sed -i "s|${key}|${escaped_val}|g" "$prompt_file"
+  done
+
+  # Ensure reviews directory exists
+  mkdir -p "$STATE_DIR/reviews"
+
+  echo "  Running review ($review_tool)..."
+  local exit_code=0
+  if [[ "$review_tool" == "amp" ]]; then
+    cat "$prompt_file" | amp --dangerously-allow-all 2>&1 || exit_code=$?
+  elif [[ "$review_tool" == "codex" ]]; then
+    local codex_model_args=""
+    if [[ -n "$review_model" ]]; then
+      codex_model_args="--model $review_model"
+    fi
+    cat "$prompt_file" | codex exec --full-auto $codex_model_args - 2>&1 || exit_code=$?
+  else
+    claude --dangerously-skip-permissions $review_model_args --print < "$prompt_file" 2>&1 || exit_code=$?
+  fi
+
+  rm -f "$prompt_file"
+
+  if [[ $exit_code -ne 0 ]]; then
+    echo "  Warning: Review failed (exit code $exit_code). Continuing without review."
+    return 0
+  fi
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -285,6 +497,29 @@ run_ralph() {
   # Ensure the target of current exists
   mkdir -p "$STATE_DIR"
 
+  # Branch setup for standalone ralph mode (not called from run_mega)
+  if [[ -z "${PLAN_ID:-}" ]]; then
+    # Load stored base branch if resuming
+    local branch_config="$STATE_DIR/.branch-config"
+    if [[ -f "$branch_config" ]]; then
+      STORED_BASE_BRANCH=$(grep '^base=' "$branch_config" 2>/dev/null | cut -d= -f2)
+    fi
+
+    prompt_base_branch
+
+    # Save branch config for resume
+    echo "base=$BASE_BRANCH" > "$branch_config"
+
+    # Set up the feature branch if prd.json has a branchName
+    if [[ -f "$PRD_FILE" ]]; then
+      local feature_branch
+      feature_branch=$(jq -r '.branchName // empty' "$PRD_FILE" 2>/dev/null || echo "")
+      if [[ -n "$feature_branch" ]]; then
+        git_ensure_branch "$feature_branch" "$BASE_BRANCH"
+      fi
+    fi
+  fi
+
   # Archive previous run if branch changed
   if [ -f "$PRD_FILE" ] && [ -f "$LAST_BRANCH_FILE" ]; then
     local current_branch last_branch
@@ -294,7 +529,7 @@ run_ralph() {
     if [ -n "$current_branch" ] && [ -n "$last_branch" ] && [ "$current_branch" != "$last_branch" ]; then
       local date_str folder_name archive_folder
       date_str=$(date +%Y-%m-%d)
-      folder_name=$(echo "$last_branch" | sed 's|^ralph/||')
+      folder_name=$(echo "$last_branch" | sed 's|^feat/||' | sed 's|^ralph/||')
       archive_folder="$ARCHIVE_DIR/$date_str-$folder_name"
 
       echo "Archiving previous run: $last_branch"
@@ -330,6 +565,9 @@ run_ralph() {
   else
     echo "Starting Ralph - Tool: $tool - Max iterations: $max_iterations"
   fi
+  if [[ "${WITH_REVIEW:-false}" == "true" ]]; then
+    echo "  Review: enabled (tool: ${REVIEW_TOOL:-$tool}, model: ${REVIEW_MODEL:-${model:-default}})"
+  fi
   echo "Interjection: echo 'your notes' > $STATE_DIR/interjection.md"
 
   # Exponential backoff settings
@@ -339,11 +577,21 @@ run_ralph() {
   # Temp file for capturing output
   OUTFILE=$(mktemp)
 
+  # Review templates
+  local REVIEW_PROMPT_TEMPLATE="$SCRIPT_DIR/review-prompt.md"
+  local REVIEW_FIXES_PROMPT_TEMPLATE="$SCRIPT_DIR/review-fixes-prompt.md"
+
   for i in $(seq 1 "$max_iterations"); do
     echo ""
     echo "==============================================================="
     echo "  Ralph Iteration $i of $max_iterations ($tool)"
     echo "==============================================================="
+
+    # Snapshot passed stories before iteration (for review detection)
+    local pre_passed_ids=""
+    if [[ "${WITH_REVIEW:-false}" == "true" && -f "$PRD_FILE" ]]; then
+      pre_passed_ids=$(jq -r '[.userStories[] | select(.passes == true) | .id] | join(",")' "$PRD_FILE" 2>/dev/null || echo "")
+    fi
 
     # Check for interjection file
     local interjection_file="$STATE_DIR/interjection.md"
@@ -415,6 +663,60 @@ run_ralph() {
 
     # Reset backoff on success
     backoff=5
+
+    # Per-story review: detect if a new story passed in this iteration
+    if [[ "${WITH_REVIEW:-false}" == "true" && -f "$PRD_FILE" && -f "$REVIEW_PROMPT_TEMPLATE" ]]; then
+      local post_passed_ids
+      post_passed_ids=$(jq -r '[.userStories[] | select(.passes == true) | .id] | join(",")' "$PRD_FILE" 2>/dev/null || echo "")
+
+      if [[ "$post_passed_ids" != "$pre_passed_ids" ]]; then
+        # Find newly passed story IDs
+        local new_ids=""
+        IFS=',' read -ra post_arr <<< "$post_passed_ids"
+        IFS=',' read -ra pre_arr <<< "$pre_passed_ids"
+        for pid in "${post_arr[@]}"; do
+          local found=false
+          for ppid in "${pre_arr[@]}"; do
+            if [[ "$pid" == "$ppid" ]]; then
+              found=true
+              break
+            fi
+          done
+          if [[ "$found" == "false" && -n "$pid" ]]; then
+            new_ids="$pid"
+            break  # Review the first newly passed story
+          fi
+        done
+
+        if [[ -n "$new_ids" ]]; then
+          local story_title
+          story_title=$(jq -r --arg id "$new_ids" '.userStories[] | select(.id == $id) | .title' "$PRD_FILE" 2>/dev/null || echo "")
+          local review_doc="$STATE_DIR/reviews/review-${new_ids}.md"
+
+          echo ""
+          echo "  ── Per-story review: $new_ids ──"
+
+          # Review turn
+          run_review_turn "$REVIEW_PROMPT_TEMPLATE" \
+            "{{STORY_ID}}" "$new_ids" \
+            "{{STORY_TITLE}}" "$story_title" \
+            "{{REVIEW_DOC_PATH}}" "$review_doc"
+
+          # Fixes turn (only if review doc was created)
+          if [[ -f "$review_doc" ]] && grep -q "NEEDS-FIXES" "$review_doc" 2>/dev/null; then
+            echo "  Review verdict: NEEDS-FIXES — running fixes..."
+            run_review_turn "$REVIEW_FIXES_PROMPT_TEMPLATE" \
+              "{{STORY_ID}}" "$new_ids" \
+              "{{REVIEW_DOC_PATH}}" "$review_doc"
+          elif [[ -f "$review_doc" ]]; then
+            echo "  Review verdict: PASS"
+          fi
+
+          echo "  ── Review complete ──"
+          echo ""
+        fi
+      fi
+    fi
 
     echo "Iteration $i complete. Continuing..."
     sleep 2
@@ -629,7 +931,24 @@ make_branch_name() {
   local slug
   slug=$(echo "$phase_title" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//')
 
-  printf "ralph/phase-%02d-%s" "$phase_num" "$slug"
+  # In mega mode: feat/M<idx>-P<padded>-<slug>
+  # In ralph mode: feat/<slug>
+  if [[ -n "${PLAN_ID:-}" ]]; then
+    printf "feat/%s-P%02d-%s" "$PLAN_ID" "$phase_num" "$slug"
+  else
+    printf "feat/%s" "$slug"
+  fi
+}
+
+# Generate the top-level mega feature branch name
+make_mega_branch_name() {
+  local plan_idx="$1"
+  local project_name="$2"
+
+  local slug
+  slug=$(echo "$project_name" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//')
+
+  printf "feat/M%s-%s" "$plan_idx" "$slug"
 }
 
 # ---------------------------------------------------------------------------
@@ -644,6 +963,7 @@ build_prompt() {
   local project_name="$6"
   local prd_file="${7:-}"
   local prd_filename="${8:-}"
+  local branch_name="${9:-}"
 
   local output_file
   output_file=$(mktemp)
@@ -667,6 +987,7 @@ replacements = {
     '{{PHASE_TITLE}}': '$phase_title',
     '{{PROJECT_NAME}}': '$project_name',
     '{{PRD_FILENAME}}': '$prd_filename',
+    '{{BRANCH_NAME}}': '$branch_name',
     '{{MASTER_PLAN}}': open('$plan_file_tmp').read(),
     '{{PHASE_DESCRIPTION}}': open('$desc_file').read(),
     '{{PREVIOUS_PHASES_SUMMARY}}': open('$summary_file').read(),
@@ -692,7 +1013,7 @@ archive_phase() {
   local date_str
   date_str=$(date +%Y-%m-%d)
   local folder_name
-  folder_name=$(echo "$branch_name" | sed 's|^ralph/||')
+  folder_name=$(echo "$branch_name" | sed 's|^feat/||' | sed 's|^ralph/||')
   local archive_path="$ARCHIVE_DIR/$date_str-$folder_name"
 
   echo "Archiving phase $phase_num: $phase_title"
@@ -700,6 +1021,13 @@ archive_phase() {
 
   [[ -f "$STATE_DIR/prd.json" ]] && cp "$STATE_DIR/prd.json" "$archive_path/"
   [[ -f "$STATE_DIR/progress.txt" ]] && cp "$STATE_DIR/progress.txt" "$archive_path/"
+
+  # Archive reviews if present
+  if [[ -d "$STATE_DIR/reviews" ]] && ls "$STATE_DIR/reviews/"*.md &>/dev/null; then
+    mkdir -p "$archive_path/reviews"
+    cp "$STATE_DIR/reviews/"*.md "$archive_path/reviews/" 2>/dev/null || true
+    rm -rf "$STATE_DIR/reviews"
+  fi
 
   local padded_phase
   padded_phase=$(printf '%02d' "$phase_num")
@@ -839,13 +1167,14 @@ convert_prd_to_json() {
   local phase_title="$3"
   local project_name="$4"
   local claude_model_args="$5"
+  local branch_name="${6:-}"
 
   echo "  Converting PRD to prd.json ..."
 
   rm -f "$STATE_DIR/prd.json"
 
   local prompt
-  prompt=$(build_prompt "$CONVERT_PROMPT_TEMPLATE" "$phase_num" "$phase_title" "" "" "$project_name" "$prd_path")
+  prompt=$(build_prompt "$CONVERT_PROMPT_TEMPLATE" "$phase_num" "$phase_title" "" "" "$project_name" "$prd_path" "" "$branch_name")
 
   local output
   output=$(claude --dangerously-skip-permissions $claude_model_args --print -p "$prompt" 2>&1) || {
@@ -971,6 +1300,37 @@ run_mega() {
     return 1
   fi
 
+  # ---------------------------------------------------------------------------
+  # Base branch selection
+  # ---------------------------------------------------------------------------
+  # Load stored base branch from masterplan.json if resuming
+  if [[ -f "$MEGA_PROGRESS" ]]; then
+    STORED_BASE_BRANCH=$(jq -r '.baseBranch // empty' "$MEGA_PROGRESS" 2>/dev/null || echo "")
+  fi
+
+  prompt_base_branch
+
+  # Parse the master plan (needed for project_name before header)
+  local project_name
+  project_name=$(basename "$PROJECT_ROOT" | sed 's/[^a-zA-Z0-9_-]/-/g')
+
+  # ---------------------------------------------------------------------------
+  # Masterplan feature branch
+  # ---------------------------------------------------------------------------
+  local mega_feature_branch
+  mega_feature_branch=$(make_mega_branch_name "$PLAN_IDX" "$project_name")
+
+  # Store in masterplan.json (or load existing)
+  if [[ -f "$MEGA_PROGRESS" ]]; then
+    local stored_feature_branch
+    stored_feature_branch=$(jq -r '.featureBranch // empty' "$MEGA_PROGRESS" 2>/dev/null || echo "")
+    if [[ -n "$stored_feature_branch" ]]; then
+      mega_feature_branch="$stored_feature_branch"
+    fi
+  fi
+
+  git_ensure_branch "$mega_feature_branch" "$BASE_BRANCH"
+
   echo ""
   echo "================================================================"
   echo "  MEGA-RALPH - Multi-Phase Project Orchestrator"
@@ -981,8 +1341,13 @@ run_mega() {
   if [[ -n "$model" ]]; then
   echo "  Model:      $model"
   fi
+  echo "  Base:       $BASE_BRANCH"
+  echo "  Feature:    $mega_feature_branch"
   echo "  Start:      Phase $start_phase"
   echo "  Max Iters:  $max_iterations per phase"
+  if [[ "${WITH_REVIEW:-false}" == "true" ]]; then
+  echo "  Review:     enabled"
+  fi
   echo "  State:      $STATE_DIR"
   echo "================================================================"
   echo ""
@@ -1003,11 +1368,17 @@ run_mega() {
   echo "Found $total_phases phases"
   echo ""
 
-  local project_name
-  project_name=$(basename "$PROJECT_ROOT" | sed 's/[^a-zA-Z0-9_-]/-/g')
-
   START_PHASE="$start_phase"
   init_progress "$total_phases"
+
+  # Store base branch and feature branch in masterplan.json
+  jq --arg base "$BASE_BRANCH" --arg feat "$mega_feature_branch" \
+    '. + {baseBranch: $base, featureBranch: $feat}' \
+    "$MEGA_PROGRESS" > "$MEGA_PROGRESS.tmp" && mv "$MEGA_PROGRESS.tmp" "$MEGA_PROGRESS"
+
+  # Phase review template
+  local PHASE_REVIEW_PROMPT_TEMPLATE="$SCRIPT_DIR/phase-review-prompt.md"
+  local REVIEW_FIXES_PROMPT_TEMPLATE="$SCRIPT_DIR/review-fixes-prompt.md"
 
   # Phase loop
   for (( phase_idx=0; phase_idx < total_phases; phase_idx++ )); do
@@ -1041,6 +1412,9 @@ run_mega() {
     branch_name=$(make_branch_name "$phase_num" "$phase_title")
     previous_summary=$(get_previous_phases_summary "$phase_num")
 
+    # Create phase branch from mega feature branch
+    git_ensure_branch "$branch_name" "$mega_feature_branch"
+
     update_progress_start "$phase_num" "$phase_title" "$branch_name"
 
     # Step 1: Generate PRD
@@ -1053,7 +1427,7 @@ run_mega() {
     fi
 
     # Step 2: Convert PRD to prd.json
-    convert_prd_to_json "$prd_path" "$phase_num" "$phase_title" "$project_name" "$claude_model_args"
+    convert_prd_to_json "$prd_path" "$phase_num" "$phase_title" "$project_name" "$claude_model_args" "$branch_name"
     if [[ $? -ne 0 ]]; then
       echo "Error: Failed to convert PRD for Phase $phase_num"
       update_progress_failed "$phase_num" 0
@@ -1086,10 +1460,44 @@ run_mega() {
 
       update_progress_complete "$phase_num" "$stories_done"
 
-      # Step 4: Reflect on learnings
+      # Phase review (if enabled)
+      if [[ "${WITH_REVIEW:-false}" == "true" && -f "$PHASE_REVIEW_PROMPT_TEMPLATE" ]]; then
+        local padded_phase_num
+        padded_phase_num=$(printf '%02d' "$phase_num")
+        local phase_review_doc="$STATE_DIR/reviews/review-phase-${phase_num}.md"
+
+        echo ""
+        echo "  ── Phase $phase_num review ──"
+
+        run_review_turn "$PHASE_REVIEW_PROMPT_TEMPLATE" \
+          "{{PHASE_NUMBER}}" "$phase_num" \
+          "{{PHASE_TITLE}}" "$phase_title" \
+          "{{PARENT_BRANCH}}" "$mega_feature_branch" \
+          "{{PHASE_BRANCH}}" "$branch_name" \
+          "{{PHASE_NUMBER_PADDED}}" "$padded_phase_num" \
+          "{{REVIEW_DOC_PATH}}" "$phase_review_doc"
+
+        # Phase fixes
+        if [[ -f "$phase_review_doc" ]] && grep -q "NEEDS-FIXES" "$phase_review_doc" 2>/dev/null; then
+          echo "  Phase review verdict: NEEDS-FIXES — running fixes..."
+          run_review_turn "$REVIEW_FIXES_PROMPT_TEMPLATE" \
+            "{{STORY_ID}}" "Phase-$phase_num" \
+            "{{REVIEW_DOC_PATH}}" "$phase_review_doc"
+        elif [[ -f "$phase_review_doc" ]]; then
+          echo "  Phase review verdict: PASS"
+        fi
+
+        echo "  ── Phase review complete ──"
+        echo ""
+      fi
+
+      # Merge phase branch back to mega feature branch
+      git_merge_branch "$branch_name" "$mega_feature_branch"
+
+      # Reflect on learnings
       reflect_and_update_plan "$phase_num" "$phase_title" "$project_name" "$claude_model_args"
 
-      # Step 5: Archive
+      # Archive
       archive_phase "$phase_num" "$phase_title" "$branch_name"
     else
       echo ""
@@ -1117,6 +1525,8 @@ run_mega() {
   local completed_count
   completed_count=$(jq '[.phases[] | select(.status == "completed")] | length' "$MEGA_PROGRESS")
   echo "  All $completed_count phases completed successfully!"
+  echo "  Feature branch: $mega_feature_branch"
+  echo "  Merge to $BASE_BRANCH when ready (e.g., via PR)"
   echo "  Progress: $MEGA_PROGRESS"
   echo "================================================================"
 }
@@ -1138,13 +1548,35 @@ case "${1:-}" in
     ;;
 esac
 
-# Parse arguments
-TOOL="claude"
-MODEL=""
-MAX_ITERATIONS=""
+# ---------------------------------------------------------------------------
+# Load config.sh defaults (if present)
+# ---------------------------------------------------------------------------
+# Config values are overridden by CLI arguments.
+# Example .ralph/config.sh:
+#   export RALPH_TOOL=claude
+#   export RALPH_MODEL=sonnet
+#   export RALPH_BASE=main
+#   export RALPH_WITH_REVIEW=true
+#   export RALPH_REVIEW_TOOL=claude
+#   export RALPH_REVIEW_MODEL=opus
+#   export RALPH_MAX_ITERATIONS=15
+#   export RALPH_MAX_ITERATIONS_PER_PHASE=25
+if [[ -f "$SCRIPT_DIR/config.sh" ]]; then
+  # shellcheck source=/dev/null
+  source "$SCRIPT_DIR/config.sh"
+fi
+
+# Parse arguments (CLI overrides config.sh)
+TOOL="${RALPH_TOOL:-claude}"
+MODEL="${RALPH_MODEL:-}"
+MAX_ITERATIONS="${RALPH_MAX_ITERATIONS:-}"
 PLAN=""
 START_PHASE=1
-MAX_ITERATIONS_PER_PHASE=25
+MAX_ITERATIONS_PER_PHASE="${RALPH_MAX_ITERATIONS_PER_PHASE:-25}"
+ARG_BASE_BRANCH="${RALPH_BASE:-}"
+WITH_REVIEW="${RALPH_WITH_REVIEW:-false}"
+REVIEW_TOOL="${RALPH_REVIEW_TOOL:-}"
+REVIEW_MODEL="${RALPH_REVIEW_MODEL:-}"
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -1186,6 +1618,34 @@ while [[ $# -gt 0 ]]; do
       ;;
     --max-iterations-per-phase=*)
       MAX_ITERATIONS_PER_PHASE="${1#*=}"
+      shift
+      ;;
+    --base)
+      ARG_BASE_BRANCH="$2"
+      shift 2
+      ;;
+    --base=*)
+      ARG_BASE_BRANCH="${1#*=}"
+      shift
+      ;;
+    --with-review)
+      WITH_REVIEW="true"
+      shift
+      ;;
+    --review-tool)
+      REVIEW_TOOL="$2"
+      shift 2
+      ;;
+    --review-tool=*)
+      REVIEW_TOOL="${1#*=}"
+      shift
+      ;;
+    --review-model)
+      REVIEW_MODEL="$2"
+      shift 2
+      ;;
+    --review-model=*)
+      REVIEW_MODEL="${1#*=}"
       shift
       ;;
     -h|--help)

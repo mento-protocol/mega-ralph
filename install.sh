@@ -13,7 +13,7 @@ set -e
 # Config
 # ---------------------------------------------------------------------------
 REPO_RAW="https://raw.githubusercontent.com/mento-protocol/mega-ralph/main"
-VERSION="4.0.0"
+VERSION="5.0.0"
 
 # ---------------------------------------------------------------------------
 # Arguments
@@ -298,6 +298,12 @@ echo "Mega-ralph templates (.ralph/):"
 download_always "$REPO_RAW/mega-claude-prompt.md"          ".ralph/mega-claude-prompt.md"          "mega-claude-prompt.md"
 download_always "$REPO_RAW/mega-ralph-convert-prompt.md"   ".ralph/mega-ralph-convert-prompt.md"   "mega-ralph-convert-prompt.md"
 download_always "$REPO_RAW/mega-ralph-reflect-prompt.md"   ".ralph/mega-ralph-reflect-prompt.md"   "mega-ralph-reflect-prompt.md"
+
+echo ""
+echo "Review templates (.ralph/):"
+download_always "$REPO_RAW/review-prompt.md"               ".ralph/review-prompt.md"               "review-prompt.md"
+download_always "$REPO_RAW/review-fixes-prompt.md"         ".ralph/review-fixes-prompt.md"         "review-fixes-prompt.md"
+download_always "$REPO_RAW/phase-review-prompt.md"         ".ralph/phase-review-prompt.md"         "phase-review-prompt.md"
 
 # ---------------------------------------------------------------------------
 # Download skills (always overwrite)

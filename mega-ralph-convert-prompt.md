@@ -15,7 +15,7 @@ Create a `.ralph/current/prd.json` file with this exact structure:
 ```json
 {
   "project": "{{PROJECT_NAME}}",
-  "branchName": "ralph/phase-{{PHASE_NUMBER}}-{{PHASE_TITLE}}",
+  "branchName": "{{BRANCH_NAME}}",
   "description": "[Description from PRD title/intro]",
   "userStories": [
     {
@@ -37,11 +37,9 @@ Create a `.ralph/current/prd.json` file with this exact structure:
 
 ## Branch Naming
 
-Use this format for the branch name: `ralph/phase-{{PHASE_NUMBER}}-{{PHASE_TITLE}}`
+The branch name is provided by run.sh: `{{BRANCH_NAME}}`
 
-Convert the phase title to kebab-case (lowercase, hyphens for spaces, no special characters). Pad the phase number to 2 digits.
-
-For example: `ralph/phase-03-api-endpoints`
+Use this exact value for the `branchName` field in prd.json. Do NOT construct the branch name yourself.
 
 ## Conversion Rules
 

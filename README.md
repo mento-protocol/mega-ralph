@@ -40,12 +40,16 @@ your-project/
 
   .ralph/                     # Infrastructure (gitignored)
     run.sh                    # Unified entry point
+    config.sh                 # Optional config defaults (see below)
     VERSION                   # Version tracking
     CLAUDE.md                 # Agent instructions (Claude Code)
     prompt.md                 # Agent instructions (Amp)
     mega-claude-prompt.md     # Phase PRD generation template
     mega-ralph-convert-prompt.md  # Phase PRD conversion template
     mega-ralph-reflect-prompt.md  # Phase reflection template
+    review-prompt.md          # Per-story review template
+    review-fixes-prompt.md    # Per-story fix applier template
+    phase-review-prompt.md    # Full-phase review template
     skills/
       prd/SKILL.md            # /prd - generate PRDs
       ralph/SKILL.md          # /ralph - convert PRDs to prd.json
@@ -57,9 +61,12 @@ your-project/
         progress.txt          # Agent learnings log
         .last-branch          # Branch change detection
         interjection.md       # User notes for next iteration
+        reviews/              # Review documents (when --with-review)
+        .branch-config        # Stored base branch (standalone mode)
       P1/                     # Standalone PRD 1 state
         prd.json
         progress.txt
+        .branch-config
     current -> state/M1       # Symlink to active state dir
     archive/                  # Completed phase archives
 ```
@@ -155,7 +162,7 @@ Creates `.ralph/current/prd.json` with user stories structured for autonomous ex
 ```
 
 Ralph will:
-1. Create a feature branch (from `branchName` in prd.json)
+1. Set up the feature branch (from `branchName` in prd.json, based on chosen base branch)
 2. Pick the highest priority story where `passes: false`
 3. Implement it, run quality checks, commit
 4. Mark story as `passes: true`
@@ -222,6 +229,98 @@ echo "Focus on error handling, not new features" > .ralph/current/interjection.m
 ```
 
 Before each iteration, Ralph checks this file. If non-empty, its contents are prepended to the agent prompt and the file is cleared. This lets you steer the agent without stopping the loop.
+
+---
+
+## Branching Strategy
+
+Ralph manages git branches automatically. You choose a **base branch** at startup and Ralph creates feature branches from it.
+
+### Base Branch Selection
+
+```bash
+# Interactive prompt (default)
+.ralph/run.sh --tool claude
+
+# Skip prompt, use specific base
+.ralph/run.sh --base main --tool claude
+.ralph/run.sh --base develop --tool claude
+```
+
+When run interactively, Ralph prompts you to choose a base branch. On resume, the selection is remembered. Non-interactive mode (piped stdin) defaults to `main`.
+
+### Branch Hierarchy
+
+**Standalone Ralph:**
+```
+main (or chosen base)
+ └─ feat/<feature-slug>       ← feature branch from prd.json branchName
+```
+
+**Mega-Ralph:**
+```
+main (or chosen base)
+ └─ feat/M1-my-project        ← masterplan feature branch
+     ├─ feat/M1-P01-setup     ← phase 1 branch (merged back after phase)
+     ├─ feat/M1-P02-core      ← phase 2 branch
+     └─ feat/M1-P03-api       ← phase 3 branch
+```
+
+After each phase completes, the phase branch is merged back into the masterplan feature branch. You merge the feature branch to your base branch manually (e.g., via PR).
+
+---
+
+## Code Review
+
+Opt-in code review adds a quality gate after each story commit and after each completed phase.
+
+```bash
+# Enable review
+.ralph/run.sh --with-review --tool claude
+
+# Use a different model for review (e.g., opus reviews sonnet's code)
+.ralph/run.sh --with-review --review-model opus --tool claude --model sonnet
+
+# Use a different tool entirely for review
+.ralph/run.sh --with-review --review-tool claude --tool amp
+```
+
+### Per-Story Review
+
+After each story is marked `passes: true`, Ralph:
+1. Runs a **review turn** — reads `git diff HEAD~1`, writes a structured review to `.ralph/current/reviews/review-<story-id>.md`
+2. If the verdict is **NEEDS-FIXES**, runs a **fixes turn** — reads the review, applies only blocking fixes, commits as `fix: <story-id> review fixes`
+
+Reviews only flag real issues: correctness bugs, security vulnerabilities, performance problems. Style nits are skipped.
+
+### Per-Phase Review (Mega-Ralph)
+
+After all stories in a phase complete, Ralph:
+1. Runs a **phase review** — reads `git diff <parent-branch>...<phase-branch>`, writes `.ralph/current/reviews/review-phase-<N>.md`
+2. If **NEEDS-FIXES**, applies blocking fixes
+3. Merges the phase branch back to the masterplan feature branch
+
+Review documents are archived with each phase for the human record.
+
+---
+
+## Configuration File
+
+Create `.ralph/config.sh` to set defaults that apply to every run. CLI arguments override config values.
+
+```bash
+# .ralph/config.sh
+export RALPH_TOOL=claude
+export RALPH_MODEL=sonnet
+export RALPH_BASE=main
+export RALPH_WITH_REVIEW=true
+export RALPH_REVIEW_TOOL=claude
+export RALPH_REVIEW_MODEL=opus
+export RALPH_MAX_ITERATIONS=15
+export RALPH_MAX_ITERATIONS_PER_PHASE=25
+```
+
+This file is sourced before argument parsing, so any `--flag` on the command line takes precedence.
 
 ---
 
