@@ -279,15 +279,15 @@ run_review_turn() {
   echo "  Running review ($review_tool)..."
   local exit_code=0
   if [[ "$review_tool" == "amp" ]]; then
-    cat "$prompt_file" | amp --dangerously-allow-all 2>&1 &
+    amp --dangerously-allow-all < "$prompt_file" >/dev/null 2>&1 &
   elif [[ "$review_tool" == "codex" ]]; then
     local codex_model_args=""
     if [[ -n "$review_model" ]]; then
       codex_model_args="--model $review_model"
     fi
-    cat "$prompt_file" | codex exec --full-auto $codex_model_args - 2>&1 &
+    codex exec --full-auto $codex_model_args - < "$prompt_file" >/dev/null 2>&1 &
   else
-    claude --dangerously-skip-permissions $review_model_args --print < "$prompt_file" 2>&1 &
+    claude --dangerously-skip-permissions $review_model_args --print < "$prompt_file" >/dev/null 2>&1 &
   fi
   CHILD_PID=$!
   wait $CHILD_PID 2>/dev/null || exit_code=$?
