@@ -155,9 +155,9 @@ cd ralph
 # Using Amp
 ./.ralph/ralph.sh --tool amp [max_iterations]
 
-# Using Codex
+# Using Codex (default: codex-mini-latest)
 ./.ralph/ralph.sh --tool codex [max_iterations]
-./.ralph/ralph.sh --tool codex --model o3 [max_iterations]
+./.ralph/ralph.sh --tool codex --model codex-1 [max_iterations]
 ```
 
 Ralph will:
