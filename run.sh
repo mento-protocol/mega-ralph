@@ -15,13 +15,32 @@ set -e
 # Signal handling - ensure Ctrl-C kills everything
 # ---------------------------------------------------------------------------
 OUTFILE=""
+CHILD_PID=""
+
+# Kill the entire process tree rooted at a given PID
+kill_tree() {
+  local pid="$1"
+  # Find all descendants (children, grandchildren, etc.)
+  local children
+  children=$(ps -o pid= --ppid "$pid" 2>/dev/null || true)
+  for child in $children; do
+    kill_tree "$child"
+  done
+  kill -TERM "$pid" 2>/dev/null || true
+}
+
 cleanup() {
   echo ""
   echo "Interrupted."
   rm -f "$OUTFILE"
-  # Remove trap to avoid recursion, then kill process group
+  # Remove trap to avoid recursion
   trap - INT TERM
-  kill 0 2>/dev/null
+  # Kill tracked child and its entire process tree
+  if [[ -n "$CHILD_PID" ]]; then
+    kill_tree "$CHILD_PID"
+  fi
+  # Also kill our process group as a safety net
+  kill -- -$$ 2>/dev/null || kill 0 2>/dev/null || true
   exit 130
 }
 trap cleanup INT TERM
@@ -260,16 +279,19 @@ run_review_turn() {
   echo "  Running review ($review_tool)..."
   local exit_code=0
   if [[ "$review_tool" == "amp" ]]; then
-    cat "$prompt_file" | amp --dangerously-allow-all 2>&1 || exit_code=$?
+    cat "$prompt_file" | amp --dangerously-allow-all 2>&1 &
   elif [[ "$review_tool" == "codex" ]]; then
     local codex_model_args=""
     if [[ -n "$review_model" ]]; then
       codex_model_args="--model $review_model"
     fi
-    cat "$prompt_file" | codex exec --full-auto $codex_model_args - 2>&1 || exit_code=$?
+    cat "$prompt_file" | codex exec --full-auto $codex_model_args - 2>&1 &
   else
-    claude --dangerously-skip-permissions $review_model_args --print < "$prompt_file" 2>&1 || exit_code=$?
+    claude --dangerously-skip-permissions $review_model_args --print < "$prompt_file" 2>&1 &
   fi
+  CHILD_PID=$!
+  wait $CHILD_PID 2>/dev/null || exit_code=$?
+  CHILD_PID=""
 
   rm -f "$prompt_file"
 
@@ -621,15 +643,18 @@ run_ralph() {
       cp "$base_prompt" "$prompt_file"
     fi
 
-    # Run the tool
+    # Run the tool — launch in background so we can track PID for cleanup
     local exit_code=0
     if [[ "$tool" == "amp" ]]; then
-      cat "$prompt_file" | amp --dangerously-allow-all 2>&1 | tee "$OUTFILE" || exit_code=$?
+      cat "$prompt_file" | amp --dangerously-allow-all 2>&1 | tee "$OUTFILE" &
     elif [[ "$tool" == "codex" ]]; then
-      cat "$prompt_file" | codex exec --full-auto $codex_model_args - 2>&1 | tee "$OUTFILE" || exit_code=$?
+      cat "$prompt_file" | codex exec --full-auto $codex_model_args - 2>&1 | tee "$OUTFILE" &
     else
-      claude --dangerously-skip-permissions $claude_model_args --print < "$prompt_file" 2>&1 | tee "$OUTFILE" || exit_code=$?
+      claude --dangerously-skip-permissions $claude_model_args --print < "$prompt_file" 2>&1 | tee "$OUTFILE" &
     fi
+    CHILD_PID=$!
+    wait $CHILD_PID 2>/dev/null || exit_code=$?
+    CHILD_PID=""
     rm -f "$prompt_file"
 
     # Exit immediately on SIGINT/SIGTERM
@@ -1097,14 +1122,21 @@ for key, val in replacements.items():
 sys.stdout.write(template)
 " > "$prompt_file"
 
-  local output
-  output=$(claude --dangerously-skip-permissions $claude_model_args --print -p "$(cat "$prompt_file")" 2>&1) || {
-    echo "  Warning: Claude failed to reflect on phase $phase_num (non-fatal, continuing)"
-    rm -f "$prompt_file" "$plan_file_tmp" "$progress_file_tmp"
-    return 0
-  }
+  local output_tmp
+  output_tmp=$(mktemp)
+  claude --dangerously-skip-permissions $claude_model_args --print < "$prompt_file" > "$output_tmp" 2>&1 &
+  CHILD_PID=$!
+  local reflect_exit=0
+  wait $CHILD_PID 2>/dev/null || reflect_exit=$?
+  CHILD_PID=""
 
-  rm -f "$prompt_file" "$plan_file_tmp" "$progress_file_tmp"
+  if [[ $reflect_exit -ne 0 ]]; then
+    echo "  Warning: Claude failed to reflect on phase $phase_num (non-fatal, continuing)"
+    rm -f "$prompt_file" "$plan_file_tmp" "$progress_file_tmp" "$output_tmp"
+    return 0
+  fi
+
+  rm -f "$prompt_file" "$plan_file_tmp" "$progress_file_tmp" "$output_tmp"
   echo "  Master plan updated with Phase $phase_num learnings."
 }
 
@@ -1141,20 +1173,36 @@ generate_phase_prd() {
   local prompt
   prompt=$(build_prompt "$PRD_PROMPT_TEMPLATE" "$phase_num" "$phase_title" "$phase_description" "$previous_summary" "$project_name" "" "$prd_filename")
 
-  local output
-  output=$(claude --dangerously-skip-permissions $claude_model_args --print -p "$prompt" 2>&1) || {
+  local output_tmp
+  output_tmp=$(mktemp)
+
+  # Write prompt to temp file for stdin redirect (avoids arg length limits)
+  local prompt_tmp
+  prompt_tmp=$(mktemp)
+  printf '%s' "$prompt" > "$prompt_tmp"
+
+  claude --dangerously-skip-permissions $claude_model_args --print < "$prompt_tmp" > "$output_tmp" 2>&1 &
+  CHILD_PID=$!
+  local gen_exit=0
+  wait $CHILD_PID 2>/dev/null || gen_exit=$?
+  CHILD_PID=""
+  rm -f "$prompt_tmp"
+
+  if [[ $gen_exit -ne 0 ]]; then
     echo "Error: Claude failed to generate PRD for phase $phase_num" >&2
-    echo "$output" >&2
+    cat "$output_tmp" >&2
+    rm -f "$output_tmp"
     return 1
-  }
+  fi
 
   if [[ ! -f "$prd_path" ]]; then
-    echo "$output" > "$prd_path"
+    cp "$output_tmp" "$prd_path"
     echo "  PRD saved (from stdout fallback): $prd_path" >&2
   else
     echo "  PRD generated: $prd_path" >&2
   fi
 
+  rm -f "$output_tmp"
   echo "$prd_path"
 }
 
@@ -1176,12 +1224,25 @@ convert_prd_to_json() {
   local prompt
   prompt=$(build_prompt "$CONVERT_PROMPT_TEMPLATE" "$phase_num" "$phase_title" "" "" "$project_name" "$prd_path" "" "$branch_name")
 
-  local output
-  output=$(claude --dangerously-skip-permissions $claude_model_args --print -p "$prompt" 2>&1) || {
+  local output_tmp prompt_tmp
+  output_tmp=$(mktemp)
+  prompt_tmp=$(mktemp)
+  printf '%s' "$prompt" > "$prompt_tmp"
+
+  claude --dangerously-skip-permissions $claude_model_args --print < "$prompt_tmp" > "$output_tmp" 2>&1 &
+  CHILD_PID=$!
+  local conv_exit=0
+  wait $CHILD_PID 2>/dev/null || conv_exit=$?
+  CHILD_PID=""
+  rm -f "$prompt_tmp"
+
+  if [[ $conv_exit -ne 0 ]]; then
     echo "Error: Claude failed to convert PRD to prd.json"
-    echo "$output"
+    cat "$output_tmp"
+    rm -f "$output_tmp"
     return 1
-  }
+  fi
+  rm -f "$output_tmp"
 
   if [[ ! -f "$STATE_DIR/prd.json" ]]; then
     echo "Error: prd.json was not created after conversion"
