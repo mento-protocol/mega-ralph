@@ -643,18 +643,23 @@ run_ralph() {
       cp "$base_prompt" "$prompt_file"
     fi
 
-    # Run the tool — launch in background so we can track PID for cleanup
+    # Run the tool — write to file, tail for terminal, track tool PID
     local exit_code=0
+    > "$OUTFILE"
     if [[ "$tool" == "amp" ]]; then
-      cat "$prompt_file" | amp --dangerously-allow-all 2>&1 | tee "$OUTFILE" &
+      amp --dangerously-allow-all < "$prompt_file" > "$OUTFILE" 2>&1 &
     elif [[ "$tool" == "codex" ]]; then
-      cat "$prompt_file" | codex exec --full-auto $codex_model_args - 2>&1 | tee "$OUTFILE" &
+      codex exec --full-auto $codex_model_args - < "$prompt_file" > "$OUTFILE" 2>&1 &
     else
-      claude --dangerously-skip-permissions $claude_model_args --print < "$prompt_file" 2>&1 | tee "$OUTFILE" &
+      claude --dangerously-skip-permissions $claude_model_args --print < "$prompt_file" > "$OUTFILE" 2>&1 &
     fi
     CHILD_PID=$!
+    # Stream output to terminal while tool runs
+    tail -f "$OUTFILE" --pid=$CHILD_PID 2>/dev/null &
+    local tail_pid=$!
     wait $CHILD_PID 2>/dev/null || exit_code=$?
     CHILD_PID=""
+    wait $tail_pid 2>/dev/null || true
     rm -f "$prompt_file"
 
     # Exit immediately on SIGINT/SIGTERM
