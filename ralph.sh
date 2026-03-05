@@ -1,6 +1,6 @@
 #!/bin/bash
 # Ralph Wiggum - Long-running AI agent loop
-# Usage: ./ralph.sh [status] [--tool amp|claude] [--model MODEL] [max_iterations]
+# Usage: ./ralph.sh [status] [--tool amp|claude|codex] [--model MODEL] [max_iterations]
 
 # ---------------------------------------------------------------------------
 # Signal handling - ensure Ctrl-C kills everything
@@ -143,15 +143,17 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Build model args for claude CLI
+# Build model args for claude/codex CLI
 CLAUDE_MODEL_ARGS=""
+CODEX_MODEL_ARGS=""
 if [[ -n "$MODEL" ]]; then
   CLAUDE_MODEL_ARGS="--model $MODEL"
+  CODEX_MODEL_ARGS="--model $MODEL"
 fi
 
 # Validate tool choice
-if [[ "$TOOL" != "amp" && "$TOOL" != "claude" ]]; then
-  echo "Error: Invalid tool '$TOOL'. Must be 'amp' or 'claude'."
+if [[ "$TOOL" != "amp" && "$TOOL" != "claude" && "$TOOL" != "codex" ]]; then
+  echo "Error: Invalid tool '$TOOL'. Must be 'amp', 'claude', or 'codex'."
   exit 1
 fi
 
@@ -243,26 +245,26 @@ for i in $(seq 1 $MAX_ITERATIONS); do
 
   # Build the prompt, prepending interjection if present
   PROMPT_FILE=$(mktemp)
+  # Amp uses prompt.md; Claude and Codex use CLAUDE.md
   if [[ "$TOOL" == "amp" ]]; then
-    if [[ -n "$INTERJECTION" ]]; then
-      printf '## IMPORTANT — User Interjection\n\nThe user has added the following notes before this iteration. Take these into account and prioritize them:\n\n%s\n\n---\n\n' "$INTERJECTION" > "$PROMPT_FILE"
-      cat "$SCRIPT_DIR/prompt.md" >> "$PROMPT_FILE"
-    else
-      cp "$SCRIPT_DIR/prompt.md" "$PROMPT_FILE"
-    fi
+    BASE_PROMPT="$SCRIPT_DIR/prompt.md"
   else
-    if [[ -n "$INTERJECTION" ]]; then
-      printf '## IMPORTANT — User Interjection\n\nThe user has added the following notes before this iteration. Take these into account and prioritize them:\n\n%s\n\n---\n\n' "$INTERJECTION" > "$PROMPT_FILE"
-      cat "$SCRIPT_DIR/CLAUDE.md" >> "$PROMPT_FILE"
-    else
-      cp "$SCRIPT_DIR/CLAUDE.md" "$PROMPT_FILE"
-    fi
+    BASE_PROMPT="$SCRIPT_DIR/CLAUDE.md"
+  fi
+
+  if [[ -n "$INTERJECTION" ]]; then
+    printf '## IMPORTANT — User Interjection\n\nThe user has added the following notes before this iteration. Take these into account and prioritize them:\n\n%s\n\n---\n\n' "$INTERJECTION" > "$PROMPT_FILE"
+    cat "$BASE_PROMPT" >> "$PROMPT_FILE"
+  else
+    cp "$BASE_PROMPT" "$PROMPT_FILE"
   fi
 
   # Run the tool — output goes to terminal AND temp file (no subshell)
   EXIT_CODE=0
   if [[ "$TOOL" == "amp" ]]; then
     cat "$PROMPT_FILE" | amp --dangerously-allow-all 2>&1 | tee "$OUTFILE" || EXIT_CODE=$?
+  elif [[ "$TOOL" == "codex" ]]; then
+    cat "$PROMPT_FILE" | codex exec --full-auto $CODEX_MODEL_ARGS - 2>&1 | tee "$OUTFILE" || EXIT_CODE=$?
   else
     claude --dangerously-skip-permissions $CLAUDE_MODEL_ARGS --print < "$PROMPT_FILE" 2>&1 | tee "$OUTFILE" || EXIT_CODE=$?
   fi

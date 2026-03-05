@@ -13,8 +13,9 @@ Based on [Geoffrey Huntley's Ralph pattern](https://ghuntley.com/ralph/).
 ## Prerequisites
 
 - One of the following AI coding tools installed and authenticated:
-  - [Amp CLI](https://ampcode.com) (default)
+  - [Amp CLI](https://ampcode.com)
   - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (`npm install -g @anthropic-ai/claude-code`)
+  - [Codex CLI](https://github.com/openai/codex) (`npm install -g @openai/codex`)
 - `jq` installed (`brew install jq` on macOS)
 - A git repository for your project
 
@@ -153,6 +154,10 @@ cd ralph
 
 # Using Amp
 ./.ralph/ralph.sh --tool amp [max_iterations]
+
+# Using Codex
+./.ralph/ralph.sh --tool codex [max_iterations]
+./.ralph/ralph.sh --tool codex --model o3 [max_iterations]
 ```
 
 Ralph will:
@@ -186,6 +191,7 @@ Open the masterplan in `ralph/plans/` and adjust phases, ordering, or scope. Eac
 cd ralph
 ./.ralph/mega-ralph.sh --plan M1 --tool claude
 ./.ralph/mega-ralph.sh --plan M1 --tool claude --model sonnet
+./.ralph/mega-ralph.sh --plan M1 --tool codex
 ```
 
 Mega-Ralph will, for each phase:

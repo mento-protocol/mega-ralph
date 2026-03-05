@@ -83,7 +83,7 @@ while [[ $# -gt 0 ]]; do
       echo "  --plan M1|FILE            Plan shorthand (M1) or file path (default: auto-detect)"
       echo "  --start-phase N           Resume from phase N (default: 1)"
       echo "  --max-iterations-per-phase N  Max ralph iterations per phase (default: 25)"
-      echo "  --tool amp|claude         AI tool to use (default: claude)"
+      echo "  --tool amp|claude|codex   AI tool to use (default: claude)"
       echo "  --model MODEL             Claude model to use (e.g., sonnet, opus)"
       echo "  -h, --help                Show this help"
       exit 0
@@ -98,8 +98,8 @@ done
 # ---------------------------------------------------------------------------
 # Validate
 # ---------------------------------------------------------------------------
-if [[ "$TOOL" != "amp" && "$TOOL" != "claude" ]]; then
-  echo "Error: Invalid tool '$TOOL'. Must be 'amp' or 'claude'."
+if [[ "$TOOL" != "amp" && "$TOOL" != "claude" && "$TOOL" != "codex" ]]; then
+  echo "Error: Invalid tool '$TOOL'. Must be 'amp', 'claude', or 'codex'."
   exit 1
 fi
 
