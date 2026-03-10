@@ -596,9 +596,6 @@ run_ralph() {
   local backoff=5
   local max_backoff=300
 
-  # Temp file for capturing output
-  OUTFILE=$(mktemp)
-
   # Review templates
   local REVIEW_PROMPT_TEMPLATE="$SCRIPT_DIR/review-prompt.md"
   local REVIEW_FIXES_PROMPT_TEMPLATE="$SCRIPT_DIR/review-fixes-prompt.md"
@@ -643,40 +640,37 @@ run_ralph() {
       cp "$base_prompt" "$prompt_file"
     fi
 
-    # Run the tool — write to file, tail for terminal, track tool PID
+    # Run the tool
     local exit_code=0
-    > "$OUTFILE"
     if [[ "$tool" == "amp" ]]; then
-      amp --dangerously-allow-all < "$prompt_file" > "$OUTFILE" 2>&1 &
+      amp --dangerously-allow-all < "$prompt_file" >/dev/null 2>&1 &
     elif [[ "$tool" == "codex" ]]; then
-      codex exec --full-auto $codex_model_args - < "$prompt_file" > "$OUTFILE" 2>&1 &
+      codex exec --full-auto $codex_model_args - < "$prompt_file" >/dev/null 2>&1 &
     else
-      claude --dangerously-skip-permissions $claude_model_args --print < "$prompt_file" > "$OUTFILE" 2>&1 &
+      claude --dangerously-skip-permissions $claude_model_args --print < "$prompt_file" >/dev/null 2>&1 &
     fi
     CHILD_PID=$!
-    # Stream output to terminal while tool runs
-    tail -f "$OUTFILE" --pid=$CHILD_PID 2>/dev/null &
-    local tail_pid=$!
     wait $CHILD_PID 2>/dev/null || exit_code=$?
     CHILD_PID=""
-    wait $tail_pid 2>/dev/null || true
     rm -f "$prompt_file"
 
     # Exit immediately on SIGINT/SIGTERM
     if [[ $exit_code -eq 130 || $exit_code -eq 143 ]]; then
       echo ""
       echo "Interrupted."
-      rm -f "$OUTFILE"
       exit $exit_code
     fi
 
-    # Check for completion signal
-    if grep -q "<promise>COMPLETE</promise>" "$OUTFILE" 2>/dev/null; then
-      echo ""
-      echo "Ralph completed all tasks!"
-      echo "Completed at iteration $i of $max_iterations"
-      rm -f "$OUTFILE"
-      return 0
+    # Check if all stories are done by reading prd.json directly
+    if [[ -f "$PRD_FILE" ]]; then
+      local remaining
+      remaining=$(jq '[.userStories[] | select(.passes == false)] | length' "$PRD_FILE" 2>/dev/null || echo "1")
+      if [[ "$remaining" -eq 0 ]]; then
+        echo ""
+        echo "Ralph completed all tasks!"
+        echo "Completed at iteration $i of $max_iterations"
+        return 0
+      fi
     fi
 
     # Check for errors and apply exponential backoff
@@ -752,7 +746,6 @@ run_ralph() {
     sleep 2
   done
 
-  rm -f "$OUTFILE"
   echo ""
   echo "Ralph reached max iterations ($max_iterations) without completing all tasks."
   echo "Check $PROGRESS_FILE for status."
